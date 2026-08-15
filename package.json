@@ -1,0 +1,53 @@
+{
+  "name": "rusvid",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Локальный агрегатор российских видеоплатформ (Rutube, VK Video, Sasflix)",
+  "scripts": {
+    "start": "react-native start",
+    "android": "react-native run-android",
+    "android:release": "react-native run-android --mode=release",
+    "build:apk": "cd android && gradlew.bat assembleRelease",
+    "build:bundle": "cd android && gradlew.bat bundleRelease",
+    "clean:android": "cd android && gradlew.bat clean",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-navigation/bottom-tabs": "^7.3.10",
+    "@react-navigation/native": "^7.1.6",
+    "@react-navigation/native-stack": "^7.3.10",
+    "react": "19.2.3",
+    "react-native": "0.87.0",
+    "react-native-safe-area-context": "^5.5.2",
+    "react-native-screens": "^4.11.1",
+    "react-native-svg": "^15.15.5",
+    "react-native-video": "^6.16.1",
+    "react-native-webview": "^13.15.0",
+    "zustand": "^5.0.5"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/preset-env": "^7.25.3",
+    "@babel/runtime": "^7.25.0",
+    "@react-native-community/cli": "20.2.0",
+    "@react-native-community/cli-platform-android": "20.2.0",
+    "@react-native/babel-preset": "0.87.0",
+    "@react-native/eslint-config": "0.87.0",
+    "@react-native/jest-preset": "0.87.0",
+    "@react-native/metro-config": "0.87.0",
+    "@react-native/typescript-config": "0.87.0",
+    "@types/jest": "^29.5.13",
+    "@types/react": "^19.2.0",
+    "eslint": "^8.19.0",
+    "jest": "^29.6.3",
+    "prettier": "2.8.8",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">= 22.11.0"
+  }
+}

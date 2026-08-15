@@ -1,0 +1,43 @@
+name: CI
+
+# Быстрая проверка на каждый push и PR: типы, линт, тесты.
+# Сборка APK вынесена в отдельный workflow (android.yml) — она долгая.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # Новый push в ту же ветку отменяет предыдущий прогон.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-checks:
+    name: Типы, линт, тесты
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Установка зависимостей
+        run: npm ci
+
+      - name: Проверка типов
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Юнит-тесты
+        # Живой смоук (live.smoke) пропускается: без RUSVID_LIVE=1 он skip.
+        # В CI мы не ходим в чужие API — они недоступны из runner'ов GitHub
+        # и их падение не должно валить сборку нашего кода.
+        run: npm test -- --ci --reporters=default
