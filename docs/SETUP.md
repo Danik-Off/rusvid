@@ -62,6 +62,7 @@ npm install
 
 | Команда | Что делает |
 |---|---|
+| `npm run release:patch` | поднимает версию в `package.json` — коммит и push запускают релиз в CI |
 | `npm start` | Metro-бандлер |
 | `npm run android` | debug-сборка + установка на устройство/эмулятор |
 | `npm run android:release` | release-сборка + установка |
@@ -114,6 +115,23 @@ android {
 Обе включены **не по умолчанию**: ProGuard требует прогонки приложения на
 устройстве (правила для нативных модулей), а ABI-splits дают несколько APK
 вместо одного, что менее удобно для ручной установки.
+
+## Версия приложения
+
+Единственный источник истины — поле `version` в `package.json`.
+`android/app/build.gradle` читает его на этапе конфигурации:
+
+```groovy
+def packageJson = new groovy.json.JsonSlurper().parseText(file("../../package.json").text)
+def appVersionName = packageJson.version          // 1.2.3
+// versionCode обязан быть целым и монотонным: 1.2.3 -> 10203
+```
+
+Поэтому номер нигде не дублируется, а `npm run release:patch` поднимает
+версию сразу и в npm-пакете, и в APK, и в теге релиза, который поставит CI.
+
+Ограничение схемы `versionCode`: `minor` и `patch` должны быть меньше 100 —
+сборка падает с понятным сообщением, если это нарушено.
 
 ## Подпись release-сборки
 

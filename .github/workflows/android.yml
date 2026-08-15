@@ -1,11 +1,11 @@
 name: Android
 
-# Сборка APK. На каждый push в main — debug (быстро, проверяет, что проект
-# вообще собирается). На тег v* — release + публикация в GitHub Releases.
+# Проверочная сборка: подтверждает, что проект вообще собирается.
+# Публикацией релизов занимается release.yml — он срабатывает на поднятие
+# версии в package.json, а не на каждый push.
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
   workflow_dispatch:
     inputs:
@@ -13,7 +13,7 @@ on:
         description: Вариант сборки
         type: choice
         options: [debug, release]
-        default: release
+        default: debug
 
 concurrency:
   group: android-${{ github.ref }}
@@ -23,7 +23,7 @@ jobs:
   build:
     name: Сборка APK
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -71,17 +71,6 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
 
-      - name: Определить вариант
-        id: variant
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "value=${{ inputs.variant }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ startsWith(github.ref, 'refs/tags/v') }}" = "true" ]; then
-            echo "value=release" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=debug" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Проверить флаги react-native-video
         # Молчаливый killer: без RNVideo_useExoplayerHls=true сборка проходит,
         # но в APK нет media3-exoplayer-hls и не играет ни одно видео.
@@ -91,9 +80,11 @@ jobs:
 
       - name: Gradle assemble
         working-directory: android
+        env:
+          VARIANT: ${{ inputs.variant || 'debug' }}
         run: |
           chmod +x gradlew
-          if [ "${{ steps.variant.outputs.value }}" = "release" ]; then
+          if [ "$VARIANT" = "release" ]; then
             ./gradlew assembleRelease --no-daemon --stacktrace
           else
             ./gradlew assembleDebug --no-daemon --stacktrace
@@ -103,6 +94,7 @@ jobs:
         # Сборка «зелёная, но без HLS» уже случалась — проверяем артефакт,
         # а не только конфигурацию.
         run: |
+          set -euo pipefail
           APK=$(find android/app/build/outputs/apk -name '*.apk' | head -n 1)
           echo "APK: $APK"
           unzip -p "$APK" classes.dex | grep -qa 'androidx/media3/exoplayer/hls' \
@@ -111,14 +103,7 @@ jobs:
       - name: Загрузить APK как артефакт
         uses: actions/upload-artifact@v4
         with:
-          name: rusvid-${{ steps.variant.outputs.value }}
+          name: rusvid-${{ inputs.variant || 'debug' }}-${{ github.sha }}
           path: android/app/build/outputs/apk/**/*.apk
           if-no-files-found: error
-          retention-days: 30
-
-      - name: Публикация релиза
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: android/app/build/outputs/apk/release/*.apk
-          generate_release_notes: true
+          retention-days: 14

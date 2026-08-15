@@ -84,16 +84,42 @@ src/
 | [docs/API-RESEARCH.md](docs/API-RESEARCH.md) | разобранные эндпоинты трёх платформ с примерами ответов |
 | [docs/SETUP.md](docs/SETUP.md) | локальная сборка, обязательные флаги, подпись APK, типичные проблемы |
 
-## CI
+## CI и релизы
 
 | Workflow | Когда | Что делает |
 |---|---|---|
 | [`ci.yml`](.github/workflows/ci.yml) | push в `main`, PR | `typecheck` → `lint` → юнит-тесты |
-| [`android.yml`](.github/workflows/android.yml) | push в `main`, PR, тег `v*` | собирает APK, **проверяет наличие классов ExoPlayer HLS внутри APK**, публикует артефакт; на теге `v*` — GitHub Release |
+| [`android.yml`](.github/workflows/android.yml) | push в `main`, PR | собирает debug APK, **проверяет наличие классов ExoPlayer HLS внутри APK**, кладёт артефакт |
+| [`release.yml`](.github/workflows/release.yml) | **поднятие `version` в `package.json`** | прогоняет проверки, собирает release APK, ставит тег `v<version>` и публикует GitHub Release |
 
-Проверка HLS в CI не декоративная: сборка без `RNVideo_useExoplayerHls=true`
-проходит успешно, но выдаёт APK, в котором не играет ни одно видео. Workflow
-падает и на потерянном флаге, и на отсутствии классов в готовом `classes.dex`.
+### Выпуск версии
+
+```powershell
+npm run release:patch     # 1.0.0 -> 1.0.1 (есть :minor и :major)
+git commit -am "chore: v1.0.1"
+git push
+```
+
+Дальше всё делает CI: замечает изменение `version`, собирает APK, ставит тег
+`v1.0.1` и публикует релиз с файлом `rusvid-1.0.1.apk`. Отдельно теги руками
+ставить не нужно — и не нужно помнить про них вообще.
+
+Версия APK берётся из того же `package.json`
+([android/app/build.gradle](android/app/build.gradle)): `versionName` — как есть,
+`versionCode` считается как `major*10000 + minor*100 + patch`, потому что
+Android умеет сравнивать только целые. Тег, `versionName` и `versionCode`
+разъехаться не могут — CI дополнительно сверяет `versionName` собранного APK
+с `package.json` и падает при расхождении.
+
+Повторный push без изменения версии релиз не выпускает, существующий тег
+не перезаписывается.
+
+### Почему проверяется HLS
+
+Сборка без `RNVideo_useExoplayerHls=true` проходит успешно, но выдаёт APK,
+в котором не играет ни одно видео. Поэтому workflow падает и на потерянном
+флаге, и на отсутствии классов в готовом `classes.dex` — проверяется
+артефакт, а не только конфигурация.
 
 ## Разработка
 

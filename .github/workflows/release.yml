@@ -1,0 +1,143 @@
+name: Release
+
+# Релиз выпускается по факту ПОДНЯТИЯ ВЕРСИИ, а не по ручному тегу.
+#
+# Рабочий цикл:
+#   npm run release:patch    # правит version в package.json
+#   git commit -am "chore: v1.0.1" && git push
+#
+# Дальше всё делает CI: замечает изменение version, собирает release APK,
+# ставит тег v1.0.1 и публикует GitHub Release с APK.
+# Версия APK берётся из того же package.json (см. android/app/build.gradle),
+# поэтому тег, versionName и versionCode не могут разъехаться.
+on:
+  push:
+    branches: [main]
+    paths: ['package.json']
+  workflow_dispatch:
+
+permissions:
+  contents: write # нужно для создания тега и релиза
+
+concurrency:
+  # Релизы не параллелим: два одновременных прогона подрались бы за тег.
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    name: Проверить поднятие версии
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      should_release: ${{ steps.check.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Нужен предыдущий коммит, чтобы сравнить версии.
+          fetch-depth: 2
+          fetch-tags: true
+
+      - id: check
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          previous=$(git show HEAD~1:package.json 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version" 2>/dev/null || echo "")
+          echo "Версия: '$previous' -> '$version'"
+
+          if git rev-parse "refs/tags/v$version" >/dev/null 2>&1; then
+            echo "Тег v$version уже существует — релиз пропускаем."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          elif [ "$version" = "$previous" ]; then
+            echo "Версия не менялась — релиз пропускаем."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    name: Собрать и опубликовать
+    needs: detect
+    if: needs.detect.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Проверки перед релизом
+        # Релиз не должен уезжать со сломанными типами или красными тестами.
+        run: |
+          npm run typecheck
+          npm run lint
+          npm test -- --ci --reporters=default
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+
+      - name: Компоненты SDK
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-37.0" \
+            "build-tools;37.0.0" \
+            "ndk;27.1.12297006" \
+            "cmake;3.22.1"
+
+      - name: Кэш Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Сборка release APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Проверить APK
+        # Сборка без media3-exoplayer-hls зелёная, но видео в ней не играет —
+        # проверяем артефакт, а не только конфигурацию.
+        run: |
+          set -euo pipefail
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          unzip -p "$APK" classes.dex | grep -qa 'androidx/media3/exoplayer/hls' \
+            || { echo '::error::В APK нет классов ExoPlayer HLS'; exit 1; }
+
+          version_name=$(aapt2 dump badging "$APK" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
+          [ "$version_name" = "${{ needs.detect.outputs.version }}" ] \
+            || { echo "::error::versionName APK ($version_name) не совпал с package.json"; exit 1; }
+          echo "APK версии $version_name проверен"
+
+      - name: Переименовать APK под версию
+        run: |
+          mv android/app/build/outputs/apk/release/app-release.apk \
+             "rusvid-${{ needs.detect.outputs.version }}.apk"
+
+      - name: Тег и релиз
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.detect.outputs.version }}
+          name: RusVid ${{ needs.detect.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          files: rusvid-${{ needs.detect.outputs.version }}.apk

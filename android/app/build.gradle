@@ -72,6 +72,32 @@ def enableProguardInReleaseBuilds = false
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
+/**
+ * Версия приложения — единственный источник истины: package.json.
+ *
+ * Так `npm version patch` поднимает версию одновременно в npm-пакете, в APK
+ * и в теге релиза, который создаёт CI (см. .github/workflows/release.yml).
+ * Дублировать номер в build.gradle означало бы рано или поздно их рассинхрон.
+ */
+def packageJson = new groovy.json.JsonSlurper().parseText(file("../../package.json").text)
+def appVersionName = packageJson.version
+
+/**
+ * versionCode обязан монотонно расти и быть целым: Android не умеет
+ * сравнивать "1.10.0" и "1.9.0". Схема major*10000 + minor*100 + patch
+ * даёт 1.0.0 -> 10000, 1.2.3 -> 10203 и требует minor/patch < 100.
+ */
+def appVersionCode = { String semver ->
+    def parts = semver.tokenize('.').collect { it.replaceAll(/[^0-9].*$/, '') as int }
+    if (parts.size() != 3) {
+        throw new GradleException("Версия в package.json должна быть вида X.Y.Z, получено: ${semver}")
+    }
+    if (parts[1] > 99 || parts[2] > 99) {
+        throw new GradleException("minor и patch должны быть меньше 100, получено: ${semver}")
+    }
+    parts[0] * 10000 + parts[1] * 100 + parts[2]
+}(appVersionName)
+
 android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
@@ -82,8 +108,8 @@ android {
         applicationId "com.rusvid"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
     }
     signingConfigs {
         debug {

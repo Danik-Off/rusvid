@@ -12,6 +12,9 @@
     "clean:android": "cd android && gradlew.bat clean",
     "lint": "eslint \"src/**/*.{ts,tsx}\" index.js",
     "typecheck": "tsc --noEmit",
+    "release:patch": "npm version patch --no-git-tag-version",
+    "release:minor": "npm version minor --no-git-tag-version",
+    "release:major": "npm version major --no-git-tag-version",
     "test": "jest",
     "test:watch": "jest --watch"
   },
