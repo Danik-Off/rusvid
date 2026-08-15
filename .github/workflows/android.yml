@@ -45,6 +45,22 @@ jobs:
 
       - name: Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+
+      - name: Компоненты SDK
+        # AGP из командной строки не доустанавливает недостающие компоненты
+        # сам — ставим ровно те версии, что заданы в android/build.gradle.
+        # NDK и CMake нужны: react-native-screens и react-native-svg
+        # компилируют C++ из исходников (в APK лежат librnscreens.so и
+        # libreact_codegen_rnsvg.so).
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-37.0" \
+            "build-tools;37.0.0" \
+            "ndk;27.1.12297006" \
+            "cmake;3.22.1"
 
       - name: Кэш Gradle
         uses: actions/cache@v4
