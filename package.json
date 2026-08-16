@@ -1,6 +1,6 @@
 {
   "name": "rusvid",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Локальный агрегатор российских видеоплатформ (Rutube, VK Video, Sasflix)",
   "scripts": {
