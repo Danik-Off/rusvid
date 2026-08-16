@@ -2,6 +2,7 @@ import { ProviderError } from '../../../core/errors/ProviderError';
 import {
   buildVkEmbedUrl,
   buildVkWebUrl,
+  extractVkPlayerHash,
   formatVkVideoId,
   parseVkVideoId,
 } from '../vkVideoId';
@@ -46,6 +47,30 @@ describe('buildVkEmbedUrl', () => {
 
   it('передаёт ключ доступа как hash — так его называет embed', () => {
     expect(buildVkEmbedUrl(parseVkVideoId('1_2_key123'))).toContain('&hash=key123');
+  });
+
+  /**
+   * Ключ из карточки точнее выведенного из идентификатора: часть видео
+   * открывается только с ним, а в id его может не быть вовсе.
+   */
+  it('предпочитает hash из карточки ключу из идентификатора', () => {
+    expect(buildVkEmbedUrl(parseVkVideoId('1_2_fromId'), 'fromCard')).toContain('&hash=fromCard');
+    expect(buildVkEmbedUrl(parseVkVideoId('1_2'), 'fromCard')).toContain('&hash=fromCard');
+  });
+});
+
+describe('extractVkPlayerHash', () => {
+  it('достаёт hash из ссылки на плеер, которую отдаёт API', () => {
+    expect(
+      extractVkPlayerHash(
+        'https://vkvideo.ru/video_ext.php?oid=-1&id=2&hash=82494be189c14302&__ref=vk.web2',
+      ),
+    ).toBe('82494be189c14302');
+  });
+
+  it('молчит без hash: видео всё равно должно открыться по идентификатору', () => {
+    expect(extractVkPlayerHash('https://vkvideo.ru/video_ext.php?oid=-1&id=2')).toBeUndefined();
+    expect(extractVkPlayerHash(undefined)).toBeUndefined();
   });
 });
 

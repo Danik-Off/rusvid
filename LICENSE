@@ -1,0 +1,122 @@
+MIT License
+
+Copyright (c) 2026 Ovchinnikov Danila
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+
+ДОПОЛНЕНИЕ: ПРАВОВАЯ ПОЗИЦИЯ И ОТКАЗ ОТ ОТВЕТСТВЕННОСТИ
+
+Настоящее дополнение поясняет назначение проекта RusVid и не ограничивает
+права, предоставленные лицензией MIT выше.
+
+1. ОТСУТСТВИЕ СВЯЗИ С ПЛАТФОРМАМИ
+
+   RusVid — независимый любительский проект. Он никак не связан с Rutube,
+   VK (VK Видео), Sasflix и любыми другими упомянутыми сервисами, не
+   аффилирован с ними, не одобрен и не спонсирован ими, не действует от их
+   имени и не представляет их интересы.
+
+   Все товарные знаки, названия сервисов, логотипы и иные обозначения
+   принадлежат их правообладателям и используются исключительно для указания
+   на соответствующие сервисы (номинативное использование). Владелец любого
+   упомянутого знака вправе потребовать удаления упоминания или поддержки
+   своего сервиса из проекта — такое требование будет выполнено.
+
+2. ОТСУТСТВИЕ НАМЕРЕНИЯ НАВРЕДИТЬ
+
+   Проект не преследует цели причинить вред платформам, их пользователям или
+   правообладателям контента. Приложение:
+
+   - не скачивает и не сохраняет видео;
+   - не снимает и не обходит DRM и иные технические средства защиты;
+   - не обходит платный доступ, подписки и региональные ограничения;
+   - не удаляет, не блокирует и не подменяет рекламу;
+   - не использует чужие идентификаторы приложений, в том числе ключи
+     официальных клиентов платформ;
+   - не создаёт нагрузку сверх той, что возникает при обычном просмотре
+     человеком: запросы выполняются в ответ на действия пользователя, без
+     массового сбора данных и без краулинга.
+
+   Приложение обращается к публично доступным интерфейсам платформ от лица
+   самого пользователя и в рамках его собственной сессии. Вход выполняется на
+   странице самой платформы во встроенном браузере; пароль пользователя не
+   проходит через код приложения.
+
+3. ОТВЕТСТВЕННОСТЬ ПОЛЬЗОВАТЕЛЯ
+
+   Ответственность за использование приложения полностью лежит на
+   пользователе. Пользователь самостоятельно обязан:
+
+   - соблюдать условия использования (пользовательские соглашения) тех
+     платформ, к которым он подключается;
+   - соблюдать законодательство своей юрисдикции, включая законодательство
+     об авторском праве;
+   - отвечать за содержимое, к которому он получает доступ через приложение.
+
+   Авторы и правообладатели проекта не размещают, не хранят и не
+   распространяют видео и иной контент платформ, не контролируют его и не
+   несут за него ответственности. Весь контент остаётся на серверах
+   соответствующих платформ и предоставляется ими.
+
+4. НЕКОММЕРЧЕСКИЙ ХАРАКТЕР
+
+   Проект создан как любительский и сделан ради удобства просмотра —
+   единый поиск, единый плеер и единая история вместо нескольких приложений.
+   Он не является коммерческим продуктом: не продаётся, не содержит рекламы,
+   встроенных покупок, платных функций и подписок, не собирает и не передаёт
+   данные пользователя третьим лицам и не извлекает прибыль из контента
+   платформ или их аудитории.
+
+5. ОТСУТСТВИЕ ГАРАНТИЙ
+
+   Приложение предоставляется «как есть», без каких-либо гарантий
+   работоспособности, доступности или пригодности для конкретных целей.
+   Интерфейсы платформ не документированы публично и могут измениться или
+   стать недоступными в любой момент; авторы не обязаны поддерживать
+   работоспособность и не отвечают за любые убытки, возникшие в связи с
+   использованием или невозможностью использования приложения.
+
+6. ОБРАТНАЯ СВЯЗЬ
+
+   Если вы представляете одну из упомянутых платформ и считаете, что проект
+   нарушает ваши права или условия использования, свяжитесь через issues
+   репозитория — вопрос будет решён, вплоть до удаления соответствующего
+   провайдера из проекта.
+
+--------------------------------------------------------------------------------
+
+ADDENDUM (English summary)
+
+RusVid is an independent, non-commercial hobby project. It is not affiliated
+with, endorsed by, or sponsored by Rutube, VK, Sasflix, or any other service.
+All trademarks belong to their respective owners and are used nominatively.
+
+The application does not download video, strip DRM, bypass paywalls or
+geo-restrictions, block or replace advertising, or use third-party application
+credentials. It accesses publicly available platform interfaces on behalf of
+the user's own session, in response to the user's own actions.
+
+The user is solely responsible for complying with the terms of service of the
+platforms they connect to and with applicable law. The authors do not host,
+store, or distribute any platform content and accept no liability for it.
+
+The software is provided "as is", without warranty of any kind, as stated in
+the MIT License above.

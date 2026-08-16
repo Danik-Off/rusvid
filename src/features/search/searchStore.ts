@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { getAppContainer } from '../../app/container/AppContainer';
 import { getProviderMeta } from '../../app/container/providerMeta';
 import type { CursorMap, ProviderFailure } from '../../core/aggregator/AggregatorService';
-import { ProviderError } from '../../core/errors/ProviderError';
+import { ProviderError, type ProviderErrorCode } from '../../core/errors/ProviderError';
 import type { VideoSummary } from '../../core/model/media';
 import { useSettingsStore } from '../settings/settingsStore';
 
@@ -16,6 +16,7 @@ interface SearchState {
   readonly failures: readonly ProviderFailure[];
   readonly status: Status;
   readonly error: string | null;
+  readonly errorCode: ProviderErrorCode | null;
   readonly hasMore: boolean;
 
   setQuery: (query: string) => void;
@@ -38,6 +39,7 @@ export const useSearchStore = create<SearchState>((set, get) => ({
   failures: [],
   status: 'idle',
   error: null,
+  errorCode: null,
   hasMore: false,
 
   setQuery: (query) => set({ query }),
@@ -48,13 +50,30 @@ export const useSearchStore = create<SearchState>((set, get) => ({
 
     if (trimmed.length === 0) {
       inFlight = null;
-      set({ query, items: [], cursors: {}, failures: [], status: 'idle', error: null, hasMore: false });
+      set({
+        query,
+        items: [],
+        cursors: {},
+        failures: [],
+        status: 'idle',
+        error: null,
+        errorCode: null,
+        hasMore: false,
+      });
       return;
     }
 
     const controller = new AbortController();
     inFlight = controller;
-    set({ query: trimmed, status: 'loading', error: null, items: [], cursors: {}, failures: [] });
+    set({
+      query: trimmed,
+      status: 'loading',
+      error: null,
+      errorCode: null,
+      items: [],
+      cursors: {},
+      failures: [],
+    });
 
     try {
       const result = await runSearch(trimmed, {}, controller.signal);
@@ -72,7 +91,8 @@ export const useSearchStore = create<SearchState>((set, get) => ({
       if (controller.signal.aborted) {
         return;
       }
-      set({ status: 'error', error: ProviderError.from(error).message });
+      const failure = ProviderError.from(error);
+      set({ status: 'error', error: failure.message, errorCode: failure.code });
     }
   },
 
@@ -116,7 +136,16 @@ export const useSearchStore = create<SearchState>((set, get) => ({
   reset: () => {
     inFlight?.abort();
     inFlight = null;
-    set({ query: '', items: [], cursors: {}, failures: [], status: 'idle', error: null, hasMore: false });
+    set({
+      query: '',
+      items: [],
+      cursors: {},
+      failures: [],
+      status: 'idle',
+      error: null,
+      errorCode: null,
+      hasMore: false,
+    });
   },
 }));
 

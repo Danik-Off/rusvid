@@ -1,11 +1,14 @@
 /**
  * Разбор идентификатора видео VK и сборка ссылок из него.
  *
- * Ключевой факт, на котором держится весь провайдер: встроенный плеер VK
- * (`video_ext.php`) открывается **без авторизации и без единого обращения
- * к API** — достаточно знать владельца и номер видео. Поэтому воспроизведение
- * не зависит ни от сессии, ни от токена, ни от доступности внутренних
- * endpoint'ов сайта: id есть в карточке, значит видео откроется.
+ * Ключевой факт, на котором держится воспроизведение: встроенный плеер VK
+ * (`video_ext.php`) открывается **без авторизации** — достаточно знать
+ * владельца и номер видео. Поэтому ролик откроется, даже если API недоступен,
+ * а пользователь никуда не входил: id есть в карточке — значит, видео сыграет.
+ *
+ * Домен здесь `vk.com`, а не `vkvideo.ru`, и это не косметика: анонимный
+ * заход на `vkvideo.ru/video_ext.php` отвечает редиректом на автологин, а на
+ * `vk.com` тот же плеер отдаётся сразу.
  */
 
 import { ProviderError } from '../../core/errors/ProviderError';
@@ -45,11 +48,13 @@ export function formatVkVideoId(id: VkVideoId): string {
  * второго тапа уже внутри WebView, `js_api=1` включает postMessage-API плеера
  * (пригодится, если понадобится читать состояние воспроизведения).
  */
-export function buildVkEmbedUrl(id: VkVideoId): string {
+export function buildVkEmbedUrl(id: VkVideoId, hash?: string): string {
   const params = [`oid=${id.ownerId}`, `id=${id.videoId}`, 'hd=2', 'autoplay=1', 'js_api=1'];
-  if (id.accessKey) {
-    // В embed ключ доступа называется `hash`, а не `access_key`.
-    params.push(`hash=${encodeURIComponent(id.accessKey)}`);
+  // В embed ключ доступа называется `hash`. Тот, что пришёл вместе с
+  // карточкой, точнее выведенного из идентификатора, поэтому он в приоритете.
+  const key = hash ?? id.accessKey;
+  if (key) {
+    params.push(`hash=${encodeURIComponent(key)}`);
   }
   return `https://vk.com/video_ext.php?${params.join('&')}`;
 }
@@ -57,4 +62,17 @@ export function buildVkEmbedUrl(id: VkVideoId): string {
 /** Страница видео на сайте — для «Открыть на сайте» и «Поделиться». */
 export function buildVkWebUrl(id: VkVideoId): string {
   return `https://vk.com/video${id.ownerId}_${id.videoId}`;
+}
+
+/**
+ * Ключ доступа из ссылки на плеер, которую отдаёт API (поле `player`).
+ *
+ * Часть видео без него не открывается, а вывести его из идентификатора
+ * нельзя — платформа выдаёт его только вместе с карточкой. Поэтому
+ * `resolvePlayback` спрашивает карточку, но не зависит от ответа: не вышло —
+ * играем по идентификатору, и большинство роликов откроется и так.
+ */
+export function extractVkPlayerHash(player: string | undefined): string | undefined {
+  const match = player ? /[?&]hash=([^&#]+)/.exec(player) : null;
+  return match ? decodeURIComponent(match[1]) : undefined;
 }

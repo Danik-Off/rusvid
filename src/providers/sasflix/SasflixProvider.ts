@@ -70,6 +70,7 @@ export class SasflixProvider implements VideoProvider {
       'Откройте меню профиля на сайте и войдите в свой аккаунт Sasflix. ' +
       'После входа вернитесь — приложение подхватит сессию.',
     verifySessionPath: '/api/user/profile',
+    sessionOrigins: [BASE_URL],
   };
 
   readonly capabilities: ProviderCapabilities = {

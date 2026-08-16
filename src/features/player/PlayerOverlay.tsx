@@ -279,21 +279,40 @@ export const PlayerOverlay: React.FC = () => {
             />
           ) : null}
           {/* У встроенного плеера платформы свои элементы управления внутри
-              WebView, поэтому свои мы не рисуем — но выход наружу дать обязаны:
-              жест по WebView до нас не всегда доходит. */}
-          {mode === 'full' && playback.isEmbed ? (
-            <View style={styles.embedBar}>
+              WebView (пауза, перемотка, качество), поэтому свои мы не рисуем.
+              Но две вещи WebView дать не может, а пользователю они нужны:
+              выход наружу (жест по WebView до нас не всегда доходит) и
+              полный экран — тот, что внутри плеера платформы, растягивает
+              кадр внутри нашего окна и системные полосы не убирает. */}
+          {mode !== 'mini' && playback.isEmbed ? (
+            <View style={[styles.embedBar, fullscreen && { paddingTop: insets.top + spacing.xs }]}>
               <Pressable
-                onPress={() => settle(false)}
+                onPress={() => (fullscreen ? fullscreenMode.exit() : settle(false))}
                 hitSlop={10}
                 style={styles.embedButton}
                 accessibilityRole="button"
-                accessibilityLabel="Свернуть плеер">
+                accessibilityLabel={
+                  fullscreen ? 'Выйти из полноэкранного режима' : 'Свернуть плеер'
+                }>
                 <Icon name="chevronDown" size={22} color={colors.white} />
               </Pressable>
               <Text style={styles.embedLabel} numberOfLines={1}>
                 {`Плеер ${provider.title}`}
               </Text>
+              <Pressable
+                onPress={fullscreenMode.toggle}
+                hitSlop={10}
+                style={styles.embedButton}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  fullscreen ? 'Выйти из полноэкранного режима' : 'Полноэкранный режим'
+                }>
+                <Icon
+                  name={fullscreen ? 'fullscreenExit' : 'fullscreen'}
+                  size={20}
+                  color={colors.white}
+                />
+              </Pressable>
             </View>
           ) : null}
           {mode === 'mini' ? (

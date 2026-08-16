@@ -15,6 +15,15 @@ interface Props {
   /** Прогресс просмотра 0..1 — полоска под превью. */
   readonly progress?: number;
   readonly isFavorite?: boolean;
+  /**
+   * Переключить избранное.
+   *
+   * Отдельно от `onLongPress`: долгое нажатие остаётся, но обнаружить его
+   * нельзя — подсказка о нём есть ровно в пустом состоянии избранного, куда
+   * попадаешь, только если уже знаешь жест. Видимая кнопка снимает эту
+   * зависимость от секретного знания.
+   */
+  readonly onToggleFavorite?: (video: VideoSummary) => void;
 }
 
 const VideoCardComponent: React.FC<Props> = ({
@@ -23,6 +32,7 @@ const VideoCardComponent: React.FC<Props> = ({
   onLongPress,
   progress,
   isFavorite,
+  onToggleFavorite,
 }) => {
   const provider = getProviderMeta(video.providerId);
   const duration = formatDuration(video.durationSec);
@@ -63,7 +73,23 @@ const VideoCardComponent: React.FC<Props> = ({
         </View>
 
         <View style={styles.bottomRow}>
-          {isFavorite ? (
+          {onToggleFavorite ? (
+            <Pressable
+              onPress={() => onToggleFavorite(video)}
+              hitSlop={10}
+              style={({ pressed }) => [styles.favoritePill, pressed && styles.favoritePillPressed]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isFavorite === true }}
+              accessibilityLabel={
+                isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'
+              }>
+              <Icon
+                name={isFavorite ? 'starFilled' : 'star'}
+                size={14}
+                color={isFavorite ? colors.warning : colors.white}
+              />
+            </Pressable>
+          ) : isFavorite ? (
             <View style={styles.favoritePill}>
               <Icon name="starFilled" size={12} color={colors.warning} />
             </View>
@@ -119,7 +145,8 @@ export const VideoCard = memo(
   (prev, next) =>
     prev.video.uid === next.video.uid &&
     prev.progress === next.progress &&
-    prev.isFavorite === next.isFavorite,
+    prev.isFavorite === next.isFavorite &&
+    prev.onToggleFavorite === next.onToggleFavorite,
 );
 
 const styles = StyleSheet.create({
@@ -214,7 +241,10 @@ const styles = StyleSheet.create({
   favoritePill: {
     backgroundColor: colors.scrim,
     borderRadius: radius.pill,
-    padding: spacing.xs,
+    padding: spacing.sm,
+  },
+  favoritePillPressed: {
+    opacity: 0.6,
   },
   progressTrack: {
     position: 'absolute',

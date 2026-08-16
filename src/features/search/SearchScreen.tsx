@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -7,10 +7,11 @@ import type { VideoSummary } from '../../core/model/media';
 import { Icon } from '../../ui/components/Icon';
 import { VideoList } from '../../ui/components/VideoList';
 import { colors, hitSlop, radius, spacing, typography } from '../../ui/theme';
-import { useLibraryStore } from '../library/libraryStore';
+import { useLibraryMarks, useLibraryStore } from '../library/libraryStore';
 import { usePlayerStore } from '../player/playerStore';
 import { useBottomSpace } from '../player/usePlayerLayout';
 import { useSettingsStore } from '../settings/settingsStore';
+import { useSearchHistoryStore } from './searchHistory';
 import { useSearchStore } from './searchStore';
 
 export const SearchScreen: React.FC = () => {
@@ -18,8 +19,8 @@ export const SearchScreen: React.FC = () => {
   const [draft, setDraft] = useState('');
   const [focused, setFocused] = useState(false);
   const enabledProviders = useSettingsStore((state) => state.settings.enabledProviders);
-  const progressOf = useLibraryStore((state) => state.progressOf);
-  const isFavorite = useLibraryStore((state) => state.isFavorite);
+  const marks = useLibraryMarks();
+  const toggleFavorite = useLibraryStore((state) => state.toggleFavorite);
   const openPlayer = usePlayerStore((state) => state.open);
   const bottomSpace = useBottomSpace();
 
@@ -32,11 +33,29 @@ export const SearchScreen: React.FC = () => {
     [enabledProviders],
   );
 
+  const recent = useSearchHistoryStore((state) => state.queries);
+  const hydrateRecent = useSearchHistoryStore((state) => state.hydrate);
+  const rememberQuery = useSearchHistoryStore((state) => state.remember);
+  const forgetQuery = useSearchHistoryStore((state) => state.forget);
+  const hydratedRecent = useSearchHistoryStore((state) => state.hydrated);
+
+  useEffect(() => {
+    if (!hydratedRecent) {
+      void hydrateRecent();
+    }
+  }, [hydratedRecent, hydrateRecent]);
+
+  const idle = search.status === 'idle';
+
   const openVideo = (video: VideoSummary) => openPlayer(video, search.items);
 
-  const submit = () => {
-    void search.submit(draft);
+  const run = (query: string) => {
+    setDraft(query);
+    void rememberQuery(query);
+    void search.submit(query);
   };
+
+  const submit = () => run(draft);
 
   const header = (
     <View style={styles.header}>
@@ -69,6 +88,38 @@ export const SearchScreen: React.FC = () => {
           </Pressable>
         ) : null}
       </View>
+      {idle && recent.length > 0 ? (
+        <View style={styles.recent}>
+          <View style={styles.recentHead}>
+            <Icon name="clock" size={14} color={colors.textMuted} />
+            <Text style={styles.recentTitle}>Недавние запросы</Text>
+          </View>
+          <View style={styles.recentList}>
+            {recent.map((query) => (
+              <View key={query} style={styles.recentChip}>
+                <Pressable
+                  hitSlop={hitSlop}
+                  onPress={() => run(query)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Искать «${query}»`}>
+                  <Text style={styles.recentLabel} numberOfLines={1}>
+                    {query}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  hitSlop={hitSlop}
+                  onPress={() => {
+                    void forgetQuery(query);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Убрать «${query}» из недавних`}>
+                  <Icon name="close" size={13} color={colors.textMuted} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
       {searchable.length > 0 ? (
         <View style={styles.sourceRow}>
           {searchable.map((provider) => (
@@ -82,8 +133,6 @@ export const SearchScreen: React.FC = () => {
     </View>
   );
 
-  const idle = search.status === 'idle';
-
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <VideoList
@@ -91,6 +140,7 @@ export const SearchScreen: React.FC = () => {
         loading={search.status === 'loading'}
         loadingMore={search.status === 'loadingMore'}
         error={search.status === 'error' ? search.error : null}
+        errorCode={search.errorCode ?? undefined}
         failures={search.failures}
         header={header}
         emptyIcon="search"
@@ -103,14 +153,15 @@ export const SearchScreen: React.FC = () => {
             : 'Попробуйте другой запрос или включите больше платформ'
         }
         onPressItem={openVideo}
+        onToggleFavorite={toggleFavorite}
         onEndReached={() => {
           void search.loadMore();
         }}
         onRetry={() => {
           void search.retry();
         }}
-        progressOf={progressOf}
-        isFavorite={isFavorite}
+        progressOf={marks.progressOf}
+        isFavorite={marks.isFavorite}
         bottomSpace={bottomSpace}
       />
     </SafeAreaView>
@@ -151,6 +202,41 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textPrimary,
     paddingVertical: spacing.md,
+  },
+  recent: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  recentHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  recentTitle: {
+    ...typography.caption,
+    color: colors.textMuted,
+  },
+  recentList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  recentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    maxWidth: '100%',
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  recentLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
   },
   sourceRow: {
     flexDirection: 'row',

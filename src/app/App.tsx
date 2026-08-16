@@ -7,6 +7,7 @@ import { colors } from '../ui/theme';
 import { useLibraryStore } from '../features/library/libraryStore';
 import { PlayerOverlay } from '../features/player/PlayerOverlay';
 import { useSettingsStore } from '../features/settings/settingsStore';
+import { useUpdatesStore } from '../features/updates/updatesStore';
 import { RootNavigator } from './navigation/RootNavigator';
 
 /**
@@ -27,12 +28,15 @@ const App: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      await Promise.all([hydrateSettings(), hydrateLibrary()]);
+      await Promise.all([hydrateSettings(), hydrateLibrary(), useUpdatesStore.getState().hydrate()]);
       if (!cancelled) {
         setReady(true);
       }
-      // Проверка сессий требует сети — не задерживаем показ интерфейса ради неё.
+      // Сеть не должна задерживать показ интерфейса, поэтому и проверка
+      // сессий, и проверка обновлений уходят уже после первого кадра.
+      // Обновления к тому же сами себя придерживают: не чаще раза в сутки.
       void useSettingsStore.getState().verifyAllSessions();
+      void useUpdatesStore.getState().check();
     })();
     return () => {
       cancelled = true;

@@ -1,7 +1,8 @@
 {
   "name": "rusvid",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "private": true,
+  "license": "MIT",
   "description": "Локальный агрегатор российских видеоплатформ (Rutube, VK Video, Sasflix)",
   "scripts": {
     "start": "react-native start",
@@ -14,7 +15,7 @@
     "icons": "node tools/gen-icons.mjs",
     "lint": "eslint \"src/**/*.{ts,tsx}\" index.js",
     "typecheck": "tsc --noEmit",
-    "version:next": "node tools/next-version.mjs",
+    "version:check": "node tools/release-version.mjs",
     "release:patch": "npm version patch --no-git-tag-version",
     "release:minor": "npm version minor --no-git-tag-version",
     "release:major": "npm version major --no-git-tag-version",
