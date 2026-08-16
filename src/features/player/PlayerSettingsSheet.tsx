@@ -4,6 +4,7 @@ import { PLAYBACK_RATES } from '../../data/settings/AppSettings';
 import { Sheet, SheetRow, SheetSection } from '../../ui/components/Sheet';
 import { plural } from '../../core/utils/format';
 import { usePlayerStore } from './playerStore';
+import { screenControl } from './screenControl';
 import { qualityLadder } from './tracks';
 
 type Page = 'root' | 'speed' | 'quality' | 'subtitles' | 'audio' | 'sleep';
@@ -247,6 +248,17 @@ export const PlayerSettingsSheet: React.FC<Props> = ({ visible, onClose, onPictu
             onPictureInPicture();
           }}
         />
+        {/* Молчаливая деградация — худший вид поломки: «не поворачивает и не
+            прячет кнопки» выглядит как баг плеера, хотя причина в сборке.
+            Поэтому отсутствие нативного модуля видно прямо здесь. */}
+        {screenControl.available ? null : (
+          <SheetRow
+            icon="alert"
+            label="Полноэкранный режим ограничен"
+            value="модуль не собран"
+            onPress={() => undefined}
+          />
+        )}
       </SheetSection>
     </Sheet>
   );

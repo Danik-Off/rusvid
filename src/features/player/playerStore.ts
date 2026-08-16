@@ -81,6 +81,15 @@ interface PlayerState {
   /** `null` — субтитры выключены. */
   readonly textTrack: number | null;
 
+  /**
+   * Блокировка управления в полноэкранном режиме.
+   *
+   * Экран продолжает показывать видео, но не реагирует ни на касания, ни на
+   * жесты — кроме кнопки снятия блокировки. Нужно там, где телефон держат
+   * в руке или он лежит рядом: случайный контакт с экраном иначе ставит
+   * паузу или перематывает.
+   */
+  readonly locked: boolean;
   readonly sleepTimer: SleepTimer;
   /** Видео, которое запустится по окончании текущего; UI рисует обратный отсчёт. */
   readonly pendingNext: VideoSummary | null;
@@ -88,7 +97,6 @@ interface PlayerState {
   open: (video: VideoSummary, queue?: readonly VideoSummary[]) => void;
   close: () => void;
   setMode: (mode: PlayerMode) => void;
-  toggleFullscreen: () => void;
 
   setPaused: (paused: boolean) => void;
   togglePlay: () => void;
@@ -117,6 +125,7 @@ interface PlayerState {
   setAudioTrack: (track: QualitySelection) => void;
   setTextTrack: (index: number | null) => void;
   setSleepTimer: (timer: SleepTimer) => void;
+  setLocked: (locked: boolean) => void;
 
   playNext: () => void;
   playPrevious: () => void;
@@ -168,6 +177,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   resizeMode: 'contain',
   repeat: false,
   quality: 'auto',
+  locked: false,
   sleepTimer: { kind: 'off' },
   ...PER_VIDEO_DEFAULTS,
 
@@ -216,14 +226,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       startPositionSec: 0,
       resumeFrom: null,
       dim: 0,
+      locked: false,
       sleepTimer: { kind: 'off' },
     });
   },
 
   setMode: (mode) => set({ mode }),
-
-  toggleFullscreen: () =>
-    set((state) => ({ mode: state.mode === 'fullscreen' ? 'full' : 'fullscreen' })),
 
   setPaused: (paused) => {
     const { current, positionSec } = get();
@@ -307,6 +315,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setAudioTrack: (audioTrack) => set({ audioTrack }),
   setTextTrack: (textTrack) => set({ textTrack }),
   setSleepTimer: (sleepTimer) => set({ sleepTimer }),
+  setLocked: (locked) => set({ locked }),
 
   playNext: () => {
     const state = get();

@@ -1,13 +1,17 @@
 /**
- * Провайдер VK Video.
+ * Провайдер VK Видео.
  *
- * В отличие от Rutube и Sasflix, VK требует access token: публичного
- * поиска по видео без него нет. Токен вводит пользователь в настройках
- * (см. docs/PROVIDERS.md#vk-token) и хранится в CredentialsStore.
+ * Два свойства, отличающие его от Rutube и Sasflix:
  *
- * Воспроизведение — ТОЛЬКО через официальный embed-плеер `video_ext.php`.
- * VK не отдаёт прямые ссылки на файлы сторонним приложениям, и мы их
- * не извлекаем: это нарушало бы условия платформы.
+ * 1. **Воспроизведение не требует ничего.** Встроенный плеер VK
+ *    (`video_ext.php`) открывается по одному только идентификатору видео —
+ *    без сессии, без токена и без единого обращения к API. Поэтому
+ *    `resolvePlayback` вообще не ходит в сеть: пока карточка есть, видео
+ *    откроется, даже если пользователь не входил.
+ * 2. **Списки требуют сессии сайта.** Публичного поиска у VK нет: анонимный
+ *    заход отвечает `errorCode=11300 invalid user`. Данные берутся так же,
+ *    как их берёт сам сайт, — через cookie-сессию, которую пользователь
+ *    заводит обычным входом во встроенном браузере (см. vkAuth.ts).
  */
 
 import { ProviderError } from '../../core/errors/ProviderError';
@@ -28,14 +32,12 @@ import type {
   VideoProvider,
 } from '../../core/provider/VideoProvider';
 import type { CredentialsStore } from '../../data/credentials/CredentialsStore';
-import { VkApiClient } from './VkApiClient';
 import { vkAuthSpec } from './vkAuth';
-import type { VkVideoListDto } from './vkApiTypes';
-import { mapVkVideo, mapVkVideoList } from './vkMappers';
+import { mapVkVideoList } from './vkMappers';
+import { buildVkEmbedUrl, buildVkWebUrl, parseVkVideoId } from './vkVideoId';
+import { VkWebClient } from './VkWebClient';
 
 const PAGE_SIZE = 20;
-/** `video.search`: 0 — по дате, 2 — по релевантности. */
-const SORT_BY_RELEVANCE = 2;
 
 export class VkProvider implements VideoProvider {
   readonly meta: ProviderMeta = {
@@ -43,84 +45,66 @@ export class VkProvider implements VideoProvider {
     title: 'VK Видео',
     badge: 'VK',
     accentColor: '#0077FF',
-    homepage: 'https://vk.com/video',
+    homepage: 'https://vkvideo.ru',
     description:
-      'Официальное API. Нужен access token с правом «video». Воспроизведение — во встроенном плеере VK.',
+      'Вход обычной сессией сайта — регистрировать приложение и вводить ключи не нужно. ' +
+      'Воспроизведение — во встроенном плеере VK.',
   };
 
   readonly auth = vkAuthSpec;
 
   readonly capabilities: ProviderCapabilities = {
     search: true,
-    // Публичной «ленты трендов» в API нет: video.getCatalog доступен
-    // не всем токенам, поэтому VK участвует только в поиске.
+    // Ленту VK отдаёт только персонализированную и только веб-клиенту;
+    // разбирать её раскладку ради вкладки «тренды» пока не за чем.
     trendingFeed: false,
     subscriptionsFeed: false,
     categories: false,
+    // Прямые ссылки на файлы VK сторонним клиентам не отдаёт, и мы их
+    // не извлекаем: играем в официальном встроенном плеере.
     nativePlayback: false,
     embedPlayback: true,
-    requiresCredentials: true,
+    // Провайдер полезен и без входа: по ссылке из истории или избранного
+    // видео откроется, потому что плееру авторизация не нужна.
+    requiresCredentials: false,
   };
 
   constructor(
     private readonly credentials: CredentialsStore,
-    private readonly api: VkApiClient = new VkApiClient(),
+    private readonly web: VkWebClient = new VkWebClient(),
   ) {}
 
-  /** Без токена провайдер бесполезен: публичного поиска у VK нет. */
+  /** Плеер работает всегда, поэтому провайдер готов и без входа. */
   isConfigured(): boolean {
-    return this.credentials.getToken('vk') !== null;
+    return true;
   }
 
   isSignedIn(): boolean {
-    return this.isConfigured();
+    return this.credentials.hasSession('vk');
   }
 
-  /** Проверка «жив ли токен» дешёвым запросом. */
   async verifySession(context: RequestContext): Promise<boolean> {
-    const token = this.credentials.getToken('vk');
-    if (!token) {
-      return false;
-    }
     try {
-      await this.api.call<VkVideoListDto>(
-        'video.search',
-        token,
-        { q: 'а', count: 1 },
-        context.signal,
-      );
-      return true;
+      const active = await this.web.probeSession(context.signal);
+      await this.credentials.setSession('vk', active);
+      return active;
     } catch {
-      return false;
+      // Сеть или сам VK недоступны — это не «пользователь вышел».
+      // Оставляем прежнюю отметку, чтобы вход не слетал на ровном месте.
+      return this.isSignedIn();
     }
   }
 
   async search(request: SearchRequest, context: RequestContext): Promise<Page<VideoSummary>> {
-    const token = this.requireToken();
+    this.requireSession();
     const offset = cursorToOffset(request.cursor);
-
-    const response = await this.api.call<VkVideoListDto>(
-      'video.search',
-      token,
-      {
-        q: request.query,
-        count: PAGE_SIZE,
-        offset,
-        sort: SORT_BY_RELEVANCE,
-        adult: 0,
-      },
-      context.signal,
-    );
-
-    const items = mapVkVideoList(response.items);
-    const received = response.items?.length ?? 0;
-    const nextOffset = offset + received;
-    const hasNext = received >= PAGE_SIZE && nextOffset < (response.count ?? Infinity);
+    const items = mapVkVideoList(await this.web.search(request.query, offset, context.signal));
 
     return {
       items,
-      nextCursor: hasNext ? String(nextOffset) : null,
-      total: response.count,
+      // VK не сообщает общее количество результатов веб-клиенту, поэтому
+      // «есть ли ещё» определяется по наполненности страницы.
+      nextCursor: items.length >= PAGE_SIZE ? String(offset + items.length) : null,
     };
   }
 
@@ -128,72 +112,44 @@ export class VkProvider implements VideoProvider {
     throw new ProviderError({
       code: 'UNSUPPORTED',
       providerId: 'vk',
-      message: 'VK API не предоставляет публичную ленту видео',
+      message: 'Лента VK доступна только в веб-клиенте платформы',
     });
   }
 
-  async getDetails(id: string, context: RequestContext): Promise<VideoDetails> {
-    const token = this.requireToken();
-    const response = await this.api.call<VkVideoListDto>(
-      'video.get',
-      token,
-      { videos: id, count: 1 },
-      context.signal,
-    );
-
-    const dto = response.items?.[0];
-    const summary = dto ? mapVkVideo(dto) : null;
-    if (!summary) {
-      throw new ProviderError({ code: 'NOT_FOUND', providerId: 'vk' });
-    }
-    return summary;
+  /**
+   * Детали берутся из уже известной карточки: отдельного запроса ради
+   * заголовка и превью не нужно — они пришли вместе с результатом поиска,
+   * а всё, что нужно плееру, выводится из идентификатора.
+   */
+  async getDetails(id: string, _context: RequestContext): Promise<VideoDetails> {
+    const parsed = parseVkVideoId(id);
+    return {
+      uid: `vk:${id}`,
+      providerId: 'vk',
+      id,
+      title: 'Видео ВКонтакте',
+      isLive: false,
+      access: 'free',
+      webUrl: buildVkWebUrl(parsed),
+    };
   }
 
-  /** VK всегда играется в своём embed-плеере, поэтому `preferEmbed` не влияет. */
+  /** Ни сети, ни авторизации: ссылка на плеер собирается из идентификатора. */
   async resolvePlayback(
     request: PlaybackRequest,
-    context: RequestContext,
+    _context: RequestContext,
   ): Promise<PlaybackSource> {
-    const token = this.requireToken();
-    const response = await this.api.call<VkVideoListDto>(
-      'video.get',
-      token,
-      { videos: request.id, count: 1 },
-      context.signal,
-    );
-
-    const dto = response.items?.[0];
-    if (!dto) {
-      throw new ProviderError({ code: 'NOT_FOUND', providerId: 'vk' });
-    }
-    if (dto.restriction) {
-      throw new ProviderError({
-        code: 'GEO_BLOCKED',
-        providerId: 'vk',
-        message: dto.restriction.title || 'Видео ограничено платформой',
-      });
-    }
-    if (!dto.player) {
-      throw new ProviderError({
-        code: 'NOT_FOUND',
-        providerId: 'vk',
-        message: 'VK не вернул ссылку на плеер для этого видео',
-      });
-    }
-
-    return { kind: 'embed', url: dto.player };
+    return { kind: 'embed', url: buildVkEmbedUrl(parseVkVideoId(request.id)) };
   }
 
-  private requireToken(): string {
-    const token = this.credentials.getToken('vk');
-    if (!token) {
+  private requireSession(): void {
+    if (!this.isSignedIn()) {
       throw new ProviderError({
         code: 'AUTH_REQUIRED',
         providerId: 'vk',
-        message: 'Добавьте access token VK в настройках',
+        message: 'Войдите во ВКонтакте в настройках — поиск по видео работает только с входом',
       });
     }
-    return token;
   }
 }
 

@@ -24,6 +24,7 @@ import { PlayerDetails } from './PlayerDetails';
 import { PlayerSettingsSheet } from './PlayerSettingsSheet';
 import { PlayerSurface } from './PlayerSurface';
 import { clamp, getVideoRef, usePlayerStore } from './playerStore';
+import { useFullscreenMode } from './useFullscreenMode';
 import { usePlayback } from './usePlayback';
 
 /** Смещение, после которого палец точно «тянет», а не промахнулся по кнопке. */
@@ -90,20 +91,9 @@ export const PlayerOverlay: React.FC = () => {
     dismissX.setValue(0);
   }, [mode, progress, dismissX]);
 
-  // Поворот устройства = вход и выход из полноэкранного режима. Форсировать
-  // ориентацию без нативного модуля нельзя, поэтому идём за системой:
-  // пользователь поворачивает телефон — плеер разворачивается сам.
-  useEffect(() => {
-    if (!visible) {
-      return;
-    }
-    const landscape = width > height;
-    if (landscape && mode === 'full') {
-      setMode('fullscreen');
-    } else if (!landscape && mode === 'fullscreen') {
-      setMode('full');
-    }
-  }, [width, height, mode, visible, setMode]);
+  // Полноэкранный режим — отдельный автомат: ориентация активности, системные
+  // полосы и правила автоповорота. См. useFullscreenMode.
+  const fullscreenMode = useFullscreenMode({ mode, setMode, width, height, active: visible });
 
   // Уход в фон и убийство приложения из недавних — самые частые способы
   // закончить просмотр, поэтому позицию дожимаем на диск именно здесь.
@@ -127,8 +117,14 @@ export const PlayerOverlay: React.FC = () => {
     }
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       const state = usePlayerStore.getState();
+      // Заблокированный экран «назад» не выключает — иначе блокировка
+      // не защищала бы от главного источника случайных нажатий.
+      if (state.locked) {
+        state.setLocked(false);
+        return true;
+      }
       if (state.mode === 'fullscreen') {
-        state.setMode('full');
+        fullscreenMode.exit();
         return true;
       }
       if (state.mode === 'full') {
@@ -138,7 +134,7 @@ export const PlayerOverlay: React.FC = () => {
       return false;
     });
     return () => subscription.remove();
-  }, [visible, settle]);
+  }, [visible, settle, fullscreenMode]);
 
   const pan = useMemo(
     () =>
@@ -277,7 +273,8 @@ export const PlayerOverlay: React.FC = () => {
               fullscreen={fullscreen}
               title={current.title}
               accentColor={provider.accentColor}
-              onCollapse={() => (fullscreen ? setMode('full') : settle(false))}
+              onCollapse={() => (fullscreen ? fullscreenMode.exit() : settle(false))}
+              onToggleFullscreen={fullscreenMode.toggle}
               onOpenSettings={() => setSettingsVisible(true)}
             />
           ) : null}

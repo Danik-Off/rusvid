@@ -28,6 +28,13 @@ export interface RequestOptions {
   readonly timeoutMs?: number;
 }
 
+/** Тело и метод для запросов, отличных от GET. */
+interface RequestPayload {
+  readonly method: 'POST';
+  readonly body: string;
+  readonly contentType: string;
+}
+
 const DEFAULT_TIMEOUT_MS = 12_000;
 const DEFAULT_MAX_RETRIES = 2;
 const RETRY_BASE_DELAY_MS = 400;
@@ -64,12 +71,40 @@ export class HttpClient {
   }
 
   async get(path: string, options: RequestOptions = {}): Promise<Response> {
+    return this.request(path, options);
+  }
+
+  /**
+   * POST формой `application/x-www-form-urlencoded`.
+   *
+   * Нужен для внутренних endpoint'ов веб-клиентов платформ: они принимают
+   * только форму и только POST. Тело собирается здесь, чтобы вызывающий
+   * не занимался экранированием.
+   */
+  async postForm(
+    path: string,
+    body: Readonly<Record<string, QueryValue>>,
+    options: RequestOptions = {},
+  ): Promise<Response> {
+    return this.request(path, options, {
+      method: 'POST',
+      // Тело формы кодируется тем же способом, что и query-строка.
+      body: buildQueryString(body),
+      contentType: 'application/x-www-form-urlencoded; charset=utf-8',
+    });
+  }
+
+  private async request(
+    path: string,
+    options: RequestOptions,
+    payload?: RequestPayload,
+  ): Promise<Response> {
     const url = this.buildUrl(path, options.query);
     let lastError: ProviderError | undefined;
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
       try {
-        return await this.executeOnce(url, options);
+        return await this.executeOnce(url, options, payload);
       } catch (error) {
         const providerError = ProviderError.from(error, this.providerId);
         if (providerError.code === 'CANCELLED' || !providerError.isRetryable) {
@@ -85,7 +120,11 @@ export class HttpClient {
     throw lastError ?? new ProviderError({ code: 'UNKNOWN', providerId: this.providerId });
   }
 
-  private async executeOnce(url: string, options: RequestOptions): Promise<Response> {
+  private async executeOnce(
+    url: string,
+    options: RequestOptions,
+    payload?: RequestPayload,
+  ): Promise<Response> {
     // Если вызывающий уже отменил запрос, слушатель 'abort' ниже не сработает
     // (событие произошло раньше подписки) — проверяем явно.
     if (options.signal?.aborted) {
@@ -100,8 +139,13 @@ export class HttpClient {
 
     try {
       const response = await fetch(url, {
-        method: 'GET',
-        headers: { ...this.defaultHeaders, ...options.headers },
+        method: payload?.method ?? 'GET',
+        headers: {
+          ...this.defaultHeaders,
+          ...(payload ? { 'Content-Type': payload.contentType } : {}),
+          ...options.headers,
+        },
+        body: payload?.body,
         signal: controller.signal,
       });
 

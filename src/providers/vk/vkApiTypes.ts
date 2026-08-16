@@ -1,19 +1,11 @@
 /**
- * Формы ответов официального VK API (`https://api.vk.com/method/...`, v5.199).
+ * Формы объектов видео ВКонтакте.
  *
- * Особенность VK: ошибки приходят с HTTP 200 и телом `{ "error": {...} }`,
- * поэтому статус-код проверять недостаточно — см. `VkApiClient`.
+ * Имена полей у VK одни и те же и в API, и в нагрузке веб-клиента
+ * (`al_video.php`): `owner_id`, `id`, `title`, `duration`, `date`, `views`,
+ * `image`. Именно поэтому `VkWebClient` может отдавать найденные объекты
+ * прямо в эти типы и переиспользовать уже покрытые тестами мапперы.
  */
-
-export interface VkErrorDto {
-  error_code?: number;
-  error_msg?: string;
-}
-
-export interface VkResponseDto<T> {
-  response?: T;
-  error?: VkErrorDto;
-}
 
 export interface VkImageDto {
   url?: string;

@@ -1,11 +1,12 @@
 name: Android
 
 # Проверочная сборка: подтверждает, что проект вообще собирается.
-# Публикацией релизов занимается release.yml — он срабатывает на поднятие
-# версии в package.json, а не на каждый push.
+#
+# В main этот workflow не нужен: там на каждый push и так собирается release
+# APK в release.yml — две часовых сборки на один коммит ничего не добавляют.
 on:
   push:
-    branches: [main]
+    branches-ignore: [main]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -103,8 +104,12 @@ jobs:
           echo "APK: $APK ($(du -h "$APK" | cut -f1))"
           # classes*.dex, а не classes.dex: R8 в release-сборке волен разложить
           # классы по dex-файлам иначе, чем неминифицированный debug.
-          unzip -p "$APK" 'classes*.dex' | grep -qa 'androidx/media3/exoplayer/hls' \
-            || { echo '::error::В APK нет классов ExoPlayer HLS'; exit 1; }
+          #
+          # grep -c, а не -q: -q закрывает поток на первом совпадении, unzip
+          # получает SIGPIPE, и pipefail превращает успешную проверку в падение.
+          hls=$(unzip -p "$APK" 'classes*.dex' | grep -ac 'androidx/media3/exoplayer/hls' || true)
+          [ "$hls" -gt 0 ] || { echo '::error::В APK нет классов ExoPlayer HLS'; exit 1; }
+          echo "HLS-классов в dex: $hls"
 
       - name: Загрузить APK как артефакт
         uses: actions/upload-artifact@v4

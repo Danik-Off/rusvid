@@ -1,6 +1,6 @@
 {
   "name": "rusvid",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Локальный агрегатор российских видеоплатформ (Rutube, VK Video, Sasflix)",
   "scripts": {
@@ -14,6 +14,7 @@
     "icons": "node tools/gen-icons.mjs",
     "lint": "eslint \"src/**/*.{ts,tsx}\" index.js",
     "typecheck": "tsc --noEmit",
+    "version:next": "node tools/next-version.mjs",
     "release:patch": "npm version patch --no-git-tag-version",
     "release:minor": "npm version minor --no-git-tag-version",
     "release:major": "npm version major --no-git-tag-version",
@@ -54,5 +55,13 @@
   },
   "engines": {
     "node": ">= 22.11.0"
+  },
+  "codegenConfig": {
+    "name": "RusVidSpec",
+    "type": "modules",
+    "jsSrcsDir": "src/specs",
+    "android": {
+      "javaPackageName": "com.rusvid.screen"
+    }
   }
 }

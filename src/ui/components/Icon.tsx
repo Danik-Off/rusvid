@@ -30,6 +30,7 @@ export type IconName =
   | 'chevronDown'
   | 'chevronUp'
   | 'lock'
+  | 'lockOpen'
   | 'check'
   | 'alert'
   | 'trash'
@@ -174,6 +175,14 @@ function renderPaths(
         <>
           <Path d="M6.5 10.5h11v9h-11z" {...stroke} />
           <Path d="M9 10.5V8a3 3 0 0 1 6 0v2.5" {...stroke} />
+        </>
+      );
+    case 'lockOpen':
+      return (
+        <>
+          <Path d="M6.5 10.5h11v9h-11z" {...stroke} />
+          {/* Дужка откинута вправо — замок читается как открытый даже в 16px. */}
+          <Path d="M9 10.5V8a3 3 0 0 1 6 0" {...stroke} />
         </>
       );
     case 'check':

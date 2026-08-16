@@ -36,6 +36,13 @@ interface Props {
   readonly fullscreen: boolean;
   /** Свернуть плеер в полоску (стрелка вниз и свайп вниз). */
   readonly onCollapse: () => void;
+  /**
+   * Переключить полноэкранный режим.
+   *
+   * Приходит снаружи, а не берётся из стора: вместе с режимом меняются
+   * ориентация активности и системные полосы, а этим ведает `useFullscreenMode`.
+   */
+  readonly onToggleFullscreen: () => void;
   readonly onOpenSettings: () => void;
   readonly accentColor: string;
   readonly title: string;
@@ -54,6 +61,7 @@ type VerticalGesture = 'none' | 'volume' | 'brightness';
 export const PlayerControls: React.FC<Props> = ({
   fullscreen,
   onCollapse,
+  onToggleFullscreen,
   onOpenSettings,
   accentColor,
   title,
@@ -65,6 +73,7 @@ export const PlayerControls: React.FC<Props> = ({
 
   const [visible, setVisible] = useState(true);
   const [scrubSec, setScrubSec] = useState<number | null>(null);
+  const [precision, setPrecision] = useState<number | null>(null);
   const [boost, setBoost] = useState(false);
   const [seekHint, setSeekHint] = useState<{ side: 'left' | 'right'; amount: number } | null>(null);
   const [gestureHint, setGestureHint] = useState<{ kind: VerticalGesture; value: number } | null>(
@@ -121,6 +130,33 @@ export const PlayerControls: React.FC<Props> = ({
     onBoost: setBoost,
   });
 
+  /**
+   * Заблокированный экран — отдельная ветка, а не `pointerEvents: none` поверх
+   * обычной: под блокировкой не должно остаться ни одной активной цели, иначе
+   * смысл теряется. Кнопка снятия прячется по тому же таймеру, что и остальное,
+   * чтобы кадр оставался чистым.
+   */
+  if (player.locked) {
+    return (
+      <View style={styles.fill}>
+        <Pressable style={styles.fill} onPress={show} accessibilityLabel="Показать снятие блокировки" />
+        <Animated.View pointerEvents={visible ? 'box-none' : 'none'} style={[styles.lockLayer, { opacity: fade }]}>
+          <Pressable
+            onPress={() => {
+              player.setLocked(false);
+              show();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Снять блокировку"
+            style={({ pressed }) => [styles.lockButton, pressed && styles.pressed]}>
+            <Icon name="lock" size={22} color={colors.white} />
+            <Text style={styles.lockLabel}>Разблокировать</Text>
+          </Pressable>
+        </Animated.View>
+      </View>
+    );
+  }
+
   const shownSec = scrubSec ?? player.positionSec;
   const remaining = Math.max(0, player.durationSec - shownSec);
   // В полноэкранном режиме нижний ряд обязан обойти системную навигацию,
@@ -174,6 +210,20 @@ export const PlayerControls: React.FC<Props> = ({
         </View>
       ) : null}
 
+      {/* Пока идёт перемотка — крупное время по центру кадра и текущая
+          точность: смотреть на цифры в углу, ведя палец, невозможно. */}
+      {scrubSec !== null ? (
+        <View pointerEvents="none" style={styles.scrubPreview}>
+          <Text style={styles.scrubTime}>{formatClock(scrubSec)}</Text>
+          <Text style={styles.scrubDelta}>
+            {formatSignedSeconds(scrubSec - player.positionSec)}
+          </Text>
+          {precision !== null && precision < 1 ? (
+            <Text style={styles.scrubPrecision}>{`точность ×${1 / precision}`}</Text>
+          ) : null}
+        </View>
+      ) : null}
+
       {boost ? (
         <View pointerEvents="none" style={styles.boost}>
           <Icon name="forward" size={14} color={colors.white} />
@@ -209,6 +259,16 @@ export const PlayerControls: React.FC<Props> = ({
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{String(player.rate).replace('.', ',')}×</Text>
             </View>
+          ) : null}
+          {/* Блокировка только в полноэкранном режиме: в обычном под кадром
+              и так есть описание и очередь, и «мёртвый» экран сбивал бы с толку. */}
+          {fullscreen ? (
+            <ControlButton
+              icon="lockOpen"
+              label="Заблокировать управление"
+              size={20}
+              onPress={() => player.setLocked(true)}
+            />
           ) : null}
           <ControlButton icon="more" label="Настройки плеера" onPress={onOpenSettings} />
         </View>
@@ -269,7 +329,7 @@ export const PlayerControls: React.FC<Props> = ({
               icon={fullscreen ? 'fullscreenExit' : 'fullscreen'}
               label={fullscreen ? 'Выйти из полноэкранного режима' : 'Полноэкранный режим'}
               size={20}
-              onPress={player.toggleFullscreen}
+              onPress={onToggleFullscreen}
             />
           </View>
           <Seekbar
@@ -278,6 +338,7 @@ export const PlayerControls: React.FC<Props> = ({
             bufferedSec={player.bufferedSec}
             accentColor={accentColor}
             onScrub={setScrubSec}
+            onPrecisionChange={setPrecision}
             onSeek={(sec) => {
               player.seekTo(sec);
               show();
@@ -568,6 +629,15 @@ function volumeIcon(value: number): IconName {
   return value <= 0.01 ? 'volumeOff' : 'volume';
 }
 
+/** «+1:20» / «−0:45» — насколько перемотка сместит позицию от текущей. */
+export function formatSignedSeconds(delta: number): string {
+  const rounded = Math.round(delta);
+  if (rounded === 0) {
+    return '±0:00';
+  }
+  return `${rounded > 0 ? '+' : '−'}${formatClock(Math.abs(rounded))}`;
+}
+
 const styles = StyleSheet.create({
   fill: {
     ...absoluteFill,
@@ -575,6 +645,25 @@ const styles = StyleSheet.create({
   dim: {
     ...absoluteFill,
     backgroundColor: colors.black,
+  },
+  lockLayer: {
+    ...absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lockButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  lockLabel: {
+    ...typography.caption,
+    color: colors.white,
+    fontWeight: '600',
   },
   centered: {
     ...absoluteFill,
@@ -725,6 +814,32 @@ const styles = StyleSheet.create({
     color: colors.white,
     minWidth: 36,
     textAlign: 'right',
+  },
+  scrubPreview: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: '32%',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    backgroundColor: 'rgba(0,0,0,0.62)',
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  scrubTime: {
+    ...typography.title,
+    color: colors.white,
+    fontVariant: ['tabular-nums'],
+  },
+  scrubDelta: {
+    ...typography.caption,
+    color: 'rgba(255,255,255,0.75)',
+    fontVariant: ['tabular-nums'],
+  },
+  scrubPrecision: {
+    ...typography.badge,
+    color: colors.accent,
+    letterSpacing: 0.4,
   },
   boost: {
     position: 'absolute',
