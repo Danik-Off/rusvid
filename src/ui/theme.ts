@@ -98,3 +98,18 @@ export const elevation = {
 } as const;
 
 export const hitSlop = { top: 8, bottom: 8, left: 8, right: 8 } as const;
+
+/**
+ * Растянуть слой на весь родитель.
+ *
+ * Свой токен вместо `StyleSheet.absoluteFillObject`: в типах React Native 0.87
+ * этого поля больше нет, а разворачивать его в каждом файле руками — верный
+ * способ рано или поздно забыть одну из четырёх сторон.
+ */
+export const absoluteFill = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+} as const;

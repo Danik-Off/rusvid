@@ -1,9 +1,19 @@
 <resources>
 
-    <!-- Base application theme. -->
-    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
-        <!-- Customize your theme here. -->
+    <!--
+      Базовая тема. Всё общее живёт здесь, а values-v29/styles.xml лишь
+      добавляет к ней атрибуты edge-to-edge, которых нет до Android 10.
+    -->
+    <style name="AppTheme.Base" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
+        <!--
+          Интерфейс всегда тёмный (src/ui/theme.ts), а тема окна — DayNight,
+          поэтому на светлой системной теме между запуском и первым кадром RN
+          мелькал белый экран. Здесь же показывается логотип.
+        -->
+        <item name="android:windowBackground">@drawable/launch_screen</item>
     </style>
+
+    <style name="AppTheme" parent="AppTheme.Base" />
 
 </resources>

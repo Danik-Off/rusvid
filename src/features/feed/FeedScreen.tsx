@@ -11,6 +11,8 @@ import { ChipRow, type ChipOption } from '../../ui/components/ChipRow';
 import { VideoList } from '../../ui/components/VideoList';
 import { colors, spacing, typography } from '../../ui/theme';
 import { useLibraryStore } from '../library/libraryStore';
+import { usePlayerStore } from '../player/playerStore';
+import { useBottomSpace } from '../player/usePlayerLayout';
 import { useSettingsStore } from '../settings/settingsStore';
 import { useFeedStore, type FeedScope } from './feedStore';
 
@@ -29,6 +31,8 @@ export const FeedScreen: React.FC = () => {
     .join(',');
   const progressOf = useLibraryStore((state) => state.progressOf);
   const isFavorite = useLibraryStore((state) => state.isFavorite);
+  const openPlayer = usePlayerStore((state) => state.open);
+  const bottomSpace = useBottomSpace();
 
   const isIdle = feed.status === 'idle';
 
@@ -83,7 +87,9 @@ export const FeedScreen: React.FC = () => {
     [feed.categories],
   );
 
-  const openVideo = (video: VideoSummary) => navigation.navigate('Player', { video });
+  // Вместе с видео плееру отдаётся вся лента: она становится очередью «Далее»,
+  // и после ролика автоматически идёт следующий, а не пустой экран.
+  const openVideo = (video: VideoSummary) => openPlayer(video, feed.items);
 
   const header = (
     <View style={styles.header}>
@@ -134,6 +140,7 @@ export const FeedScreen: React.FC = () => {
         }}
         progressOf={progressOf}
         isFavorite={isFavorite}
+        bottomSpace={bottomSpace}
       />
     </SafeAreaView>
   );

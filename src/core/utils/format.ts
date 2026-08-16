@@ -13,6 +13,17 @@ export function formatDuration(seconds: number | undefined): string | null {
   return hours > 0 ? `${hours}:${pad(minutes)}:${pad(secs)}` : `${minutes}:${pad(secs)}`;
 }
 
+/**
+ * То же, что {@link formatDuration}, но всегда возвращает строку.
+ *
+ * Отдельная функция, потому что назначение другое: в карточке отсутствующая
+ * длительность просто не рисуется (отсюда `null`), а таймер плеера обязан
+ * показывать «0:00» с первой секунды — иначе он мигает пустотой при старте.
+ */
+export function formatClock(seconds: number | undefined): string {
+  return formatDuration(seconds) ?? '0:00';
+}
+
 /** 1234 -> "1,2 тыс.", 7180693 -> "7,2 млн". */
 export function formatViews(views: number | undefined): string | null {
   if (views === undefined || !Number.isFinite(views) || views < 0) {

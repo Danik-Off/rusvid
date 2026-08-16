@@ -2,6 +2,18 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!--
+      Фоновое воспроизведение. Оно выключено по умолчанию (см. AppSettings),
+      но когда включено — звук идёт из foreground-сервиса media3, иначе
+      Android убивает воспроизведение через несколько секунд после сворачивания.
+      POST_NOTIFICATIONS нужен на Android 13+ ради самого уведомления плеера;
+      разрешение запрашивается системой при первом показе, отказ означает лишь
+      отсутствие карточки в шторке.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
       android:name=".MainApplication"
       android:label="@string/app_name"
@@ -17,11 +29,26 @@
         android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
         android:launchMode="singleTask"
         android:windowSoftInputMode="adjustResize"
+        android:supportsPictureInPicture="true"
         android:exported="true">
         <intent-filter>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
+
+      <!--
+        Сервис из react-native-video: держит MediaSession, рисует уведомление
+        с play/pause и отвечает на кнопки гарнитуры. Без объявления здесь
+        `showNotificationControls` и `playInBackground` молча не работают.
+      -->
+      <service
+        android:name="com.brentvatne.exoplayer.VideoPlaybackService"
+        android:foregroundServiceType="mediaPlayback"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="androidx.media3.session.MediaSessionService" />
+        </intent-filter>
+      </service>
     </application>
 </manifest>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Сгенерировано tools/gen-icons.mjs — правьте генератор, а не этот файл. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+  <path android:pathData="M34.97 26.75L44.97 32.29A2 2 0 0 1 46 34.04L46 73.96A2 2 0 0 1 44.97 75.71L34.97 81.25A2 2 0 0 1 32 79.5L32 28.5A2 2 0 0 1 34.97 26.75Z">
+      <aapt:attr name="android:fillColor">
+        <gradient
+            android:type="linear"
+            android:startX="26" android:startY="20"
+            android:endX="82" android:endY="76"
+            android:startColor="#8FB2FF"
+            android:endColor="#4A74FF"/>
+      </aapt:attr>
+  </path>
+  <path android:pathData="M52.97 36.73L60.97 41.16A2 2 0 0 1 62 42.91L62 65.09A2 2 0 0 1 60.97 66.84L52.97 71.27A2 2 0 0 1 50 69.52L50 38.48A2 2 0 0 1 52.97 36.73Z">
+      <aapt:attr name="android:fillColor">
+        <gradient
+            android:type="linear"
+            android:startX="26" android:startY="20"
+            android:endX="82" android:endY="76"
+            android:startColor="#8FB2FF"
+            android:endColor="#4A74FF"/>
+      </aapt:attr>
+  </path>
+  <path android:pathData="M68.97 45.6L80.97 52.25A2 2 0 0 1 80.97 55.75L68.97 62.4A2 2 0 0 1 66 60.65L66 47.35A2 2 0 0 1 68.97 45.6Z">
+      <aapt:attr name="android:fillColor">
+        <gradient
+            android:type="linear"
+            android:startX="26" android:startY="20"
+            android:endX="82" android:endY="76"
+            android:startColor="#8FB2FF"
+            android:endColor="#4A74FF"/>
+      </aapt:attr>
+  </path>
+</vector>

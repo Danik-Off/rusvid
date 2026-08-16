@@ -55,9 +55,22 @@ react {
 }
 
 /**
- * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
+ * Минификация R8 на release-сборках.
+ *
+ * Включена: без неё три dex-файла занимали ~22 МБ — почти весь androidx,
+ * media3 и OkHttp тянулись целиком, хотя приложение использует малую часть.
+ * Правила keep для React Native, media3 и OkHttp приезжают из consumer-rules
+ * внутри их же AAR/JAR, наши дополнения — в proguard-rules.pro.
  */
-def enableProguardInReleaseBuilds = false
+def enableProguardInReleaseBuilds = true
+
+/**
+ * ABI, ради которых вообще собирается нативный код. Значение по умолчанию —
+ * из gradle.properties (там все четыре, чтобы работал эмулятор); релизный CI
+ * передаёт только «телефонные»: -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+ */
+def targetAbis = (project.findProperty("reactNativeArchitectures")
+        ?: "armeabi-v7a,arm64-v8a").split(",").collect { it.trim() }.findAll { it }
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -111,6 +124,35 @@ android {
         versionCode appVersionCode
         versionName appVersionName
     }
+
+    /**
+     * Один APK на каждую ABI вместо универсального.
+     *
+     * В универсальной сборке libreactnative.so + libhermesvm.so и вся нативка
+     * лежали в четырёх экземплярах (~59 МБ из 75 МБ APK), причём x86/x86_64
+     * нужны только эмулятору. Телефон всё равно распаковывает одну ABI.
+     *
+     * versionCode при этом общий для всех ABI: раздача идёт через GitHub
+     * Releases, где APK выбирают руками, а не через Play Store, которому
+     * потребовались бы разные коды.
+     */
+    splits {
+        abi {
+            enable true
+            reset()
+            include(*targetAbis)
+            universalApk false
+        }
+    }
+
+    /**
+     * В APK остаются только русские и английские строки. AndroidX, media3 и
+     * WebView тащат переводы на ~80 языков — приложение локализовано на два.
+     */
+    androidResources {
+        localeFilters += ["en", "ru"]
+    }
+
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
@@ -128,7 +170,22 @@ android {
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
+            // Выкидывает ресурсы, на которые после минификации никто не ссылается
+            // (иконки и layout'ы androidx/media3-ui, которые мы не показываем).
+            shrinkResources enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+
+    packaging {
+        resources {
+            // Метаданные сборки, которые не нужны в рантайме.
+            excludes += [
+                "META-INF/*.version",
+                "META-INF/*.kotlin_module",
+                "DebugProbesKt.bin",
+                "kotlin-tooling-metadata.json",
+            ]
         }
     }
 }

@@ -29,6 +29,12 @@ interface Props {
   readonly onRetry?: () => void;
   readonly progressOf?: (video: VideoSummary) => number | undefined;
   readonly isFavorite?: (uid: string) => boolean;
+  /**
+   * Сколько места снизу занято таб-баром, системной навигацией и свёрнутым
+   * плеером. Без этого последняя карточка прячется под панелями и по ней
+   * невозможно попасть пальцем.
+   */
+  readonly bottomSpace?: number;
 }
 
 /**
@@ -54,6 +60,7 @@ export const VideoList: React.FC<Props> = ({
   onRetry,
   progressOf,
   isFavorite,
+  bottomSpace = 0,
 }) => {
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<VideoSummary>) => (
@@ -115,7 +122,10 @@ export const VideoList: React.FC<Props> = ({
       ListFooterComponent={<ListFooterLoader visible={loadingMore} />}
       onEndReached={onEndReached}
       onEndReachedThreshold={0.6}
-      contentContainerStyle={items.length === 0 ? styles.emptyContainer : styles.container}
+      contentContainerStyle={[
+        items.length === 0 ? styles.emptyContainer : styles.container,
+        { paddingBottom: bottomSpace + spacing.xl },
+      ]}
       refreshControl={
         onRefresh ? (
           <RefreshControl
@@ -143,10 +153,8 @@ function keyExtractor(item: VideoSummary): string {
 const styles = StyleSheet.create({
   container: {
     paddingTop: spacing.sm,
-    paddingBottom: spacing.xxxl,
   },
   emptyContainer: {
     flexGrow: 1,
-    paddingBottom: spacing.xxxl,
   },
 });

@@ -112,26 +112,45 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          # Только «телефонные» ABI: x86/x86_64 нужны эмулятору, а не тем, кто
+          # ставит APK из релиза. Сборка разделена по ABI (splits в build.gradle),
+          # поэтому на выходе два APK, а не один универсальный на 75 МБ.
+          ./gradlew assembleRelease \
+            -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
+            --no-daemon --stacktrace
 
       - name: Проверить APK
         # Сборка без media3-exoplayer-hls зелёная, но видео в ней не играет —
         # проверяем артефакт, а не только конфигурацию.
         run: |
           set -euo pipefail
-          APK=android/app/build/outputs/apk/release/app-release.apk
-          unzip -p "$APK" classes.dex | grep -qa 'androidx/media3/exoplayer/hls' \
-            || { echo '::error::В APK нет классов ExoPlayer HLS'; exit 1; }
+          version="${{ needs.detect.outputs.version }}"
+          out=android/app/build/outputs/apk/release
 
-          version_name=$(aapt2 dump badging "$APK" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
-          [ "$version_name" = "${{ needs.detect.outputs.version }}" ] \
-            || { echo "::error::versionName APK ($version_name) не совпал с package.json"; exit 1; }
-          echo "APK версии $version_name проверен"
+          for abi in arm64-v8a armeabi-v7a; do
+            APK="$out/app-$abi-release.apk"
+            [ -f "$APK" ] || { echo "::error::Не собран APK для $abi"; exit 1; }
+
+            # classes*.dex: R8 волен разложить классы по dex-файлам как угодно,
+            # HlsMediaSource$Factory сохраняется по имени consumer-правилами media3.
+            unzip -p "$APK" 'classes*.dex' | grep -qa 'androidx/media3/exoplayer/hls' \
+              || { echo "::error::В APK $abi нет классов ExoPlayer HLS"; exit 1; }
+
+            version_name=$(aapt2 dump badging "$APK" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
+            [ "$version_name" = "$version" ] \
+              || { echo "::error::versionName APK $abi ($version_name) не совпал с package.json"; exit 1; }
+
+            echo "$abi: версия $version_name, $(du -h "$APK" | cut -f1) — проверен"
+          done
 
       - name: Переименовать APK под версию
         run: |
-          mv android/app/build/outputs/apk/release/app-release.apk \
-             "rusvid-${{ needs.detect.outputs.version }}.apk"
+          set -euo pipefail
+          version="${{ needs.detect.outputs.version }}"
+          for abi in arm64-v8a armeabi-v7a; do
+            mv "android/app/build/outputs/apk/release/app-$abi-release.apk" \
+               "rusvid-$version-$abi.apk"
+          done
 
       - name: Тег и релиз
         uses: softprops/action-gh-release@v2
@@ -140,4 +159,17 @@ jobs:
           name: RusVid ${{ needs.detect.outputs.version }}
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
-          files: rusvid-${{ needs.detect.outputs.version }}.apk
+          # Два файла вместо одного универсального: почти всем нужен arm64-v8a,
+          # armeabi-v7a — для старых 32-битных устройств.
+          body: |
+            ## Установка
+
+            | Файл | Кому |
+            |---|---|
+            | `rusvid-${{ needs.detect.outputs.version }}-arm64-v8a.apk` | практически все устройства с 2015 года |
+            | `rusvid-${{ needs.detect.outputs.version }}-armeabi-v7a.apk` | старые 32-битные устройства |
+
+            Если не уверены — берите `arm64-v8a`.
+          files: |
+            rusvid-${{ needs.detect.outputs.version }}-arm64-v8a.apk
+            rusvid-${{ needs.detect.outputs.version }}-armeabi-v7a.apk

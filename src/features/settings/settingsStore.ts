@@ -14,8 +14,14 @@ interface SettingsState {
 
   hydrate: () => Promise<void>;
   toggleProvider: (id: ProviderId) => Promise<void>;
-  setHistoryEnabled: (enabled: boolean) => Promise<void>;
-  setPreferNativePlayer: (enabled: boolean) => Promise<void>;
+  /**
+   * Точечное изменение настроек.
+   *
+   * Настроек плеера стало больше десятка, и отдельный сеттер на каждую
+   * превратился бы в стену однострочников: экран настроек всё равно всегда
+   * знает и поле, и новое значение.
+   */
+  update: (patch: Partial<AppSettings>) => Promise<void>;
   setToken: (id: ProviderId, token: string | null) => Promise<void>;
   setClientId: (id: ProviderId, clientId: string | null) => Promise<void>;
   signOut: (id: ProviderId) => Promise<void>;
@@ -58,12 +64,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     await persist(set, { ...current, enabledProviders: Array.from(enabled) });
   },
 
-  setHistoryEnabled: async (historyEnabled) => {
-    await persist(set, { ...get().settings, historyEnabled });
-  },
-
-  setPreferNativePlayer: async (preferNativePlayer) => {
-    await persist(set, { ...get().settings, preferNativePlayer });
+  update: async (patch) => {
+    await persist(set, { ...get().settings, ...patch });
   },
 
   setToken: async (id, token) => {

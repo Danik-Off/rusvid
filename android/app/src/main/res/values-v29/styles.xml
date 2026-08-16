@@ -1,0 +1,29 @@
+<resources>
+
+    <!--
+      Edge-to-edge на Android 10+.
+
+      Приложение и так рисуется под системными полосами (`edgeToEdgeEnabled=true`
+      в gradle.properties), но по умолчанию система подкладывает под панель
+      навигации полупрозрачную серую подложку «для контраста». На тёмном
+      интерфейсе она выглядела как чужая полоса поверх контента, а вместе с
+      прежней жёсткой высотой таб-бара — как будто вкладки уехали под клавиши
+      «назад / домой / меню». Отступы теперь считает сам интерфейс
+      (см. src/ui/layout.ts), поэтому подложка не нужна.
+
+      Атрибуты появились в API 29, отсюда и отдельная папка: на более старых
+      системах остаётся базовая тема.
+    -->
+    <style name="AppTheme" parent="AppTheme.Base">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <!-- Иконки системных полос всегда светлые: фон под ними тёмный. -->
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <!-- Вырез камеры не должен обрезать кадр в полноэкранном режиме. -->
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+
+</resources>

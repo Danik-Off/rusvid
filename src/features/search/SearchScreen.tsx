@@ -1,29 +1,27 @@
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getAppContainer } from '../../app/container/AppContainer';
-import type { RootStackParamList } from '../../app/navigation/types';
 import type { VideoSummary } from '../../core/model/media';
 import { Icon } from '../../ui/components/Icon';
 import { VideoList } from '../../ui/components/VideoList';
 import { colors, hitSlop, radius, spacing, typography } from '../../ui/theme';
 import { useLibraryStore } from '../library/libraryStore';
+import { usePlayerStore } from '../player/playerStore';
+import { useBottomSpace } from '../player/usePlayerLayout';
 import { useSettingsStore } from '../settings/settingsStore';
 import { useSearchStore } from './searchStore';
 
-type Navigation = NativeStackNavigationProp<RootStackParamList>;
-
 export const SearchScreen: React.FC = () => {
-  const navigation = useNavigation<Navigation>();
   const search = useSearchStore();
   const [draft, setDraft] = useState('');
   const [focused, setFocused] = useState(false);
   const enabledProviders = useSettingsStore((state) => state.settings.enabledProviders);
   const progressOf = useLibraryStore((state) => state.progressOf);
   const isFavorite = useLibraryStore((state) => state.isFavorite);
+  const openPlayer = usePlayerStore((state) => state.open);
+  const bottomSpace = useBottomSpace();
 
   /** Платформы, которые реально будут опрошены — их и обещаем пользователю. */
   const searchable = useMemo(
@@ -34,7 +32,7 @@ export const SearchScreen: React.FC = () => {
     [enabledProviders],
   );
 
-  const openVideo = (video: VideoSummary) => navigation.navigate('Player', { video });
+  const openVideo = (video: VideoSummary) => openPlayer(video, search.items);
 
   const submit = () => {
     void search.submit(draft);
@@ -113,6 +111,7 @@ export const SearchScreen: React.FC = () => {
         }}
         progressOf={progressOf}
         isFavorite={isFavorite}
+        bottomSpace={bottomSpace}
       />
     </SafeAreaView>
   );

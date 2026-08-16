@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -10,8 +10,19 @@ import type { ProviderId } from '../../core/model/media';
 import type { VideoProvider } from '../../core/provider/VideoProvider';
 import { Button } from '../../ui/components/Button';
 import { Icon } from '../../ui/components/Icon';
+import { Logo } from '../../ui/components/Logo';
+import { Sheet, SheetRow } from '../../ui/components/Sheet';
 import { colors, hitSlop, radius, spacing, typography } from '../../ui/theme';
+import {
+  PLAYBACK_RATES,
+  QUALITY_PREFERENCES,
+  type AppSettings,
+  type QualityPreference,
+} from '../../data/settings/AppSettings';
+import { useBottomSpace } from '../player/usePlayerLayout';
 import { useSettingsStore } from './settingsStore';
+
+const SEEK_STEPS = [5, 10, 15, 30];
 
 type Navigation = NativeStackNavigationProp<RootStackParamList>;
 
@@ -20,12 +31,18 @@ export const SettingsScreen: React.FC = () => {
   const settings = useSettingsStore((state) => state.settings);
   const signedIn = useSettingsStore((state) => state.signedIn);
   const toggleProvider = useSettingsStore((state) => state.toggleProvider);
-  const setHistoryEnabled = useSettingsStore((state) => state.setHistoryEnabled);
-  const setPreferNativePlayer = useSettingsStore((state) => state.setPreferNativePlayer);
+  const update = useSettingsStore((state) => state.update);
   const signOut = useSettingsStore((state) => state.signOut);
   const verifyAllSessions = useSettingsStore((state) => state.verifyAllSessions);
+  const bottomSpace = useBottomSpace();
+  const [choice, setChoice] = useState<'rate' | 'quality' | 'seekStep' | null>(null);
 
   const providers = getAppContainer().registry.all();
+
+  const set = <K extends keyof AppSettings>(key: K) =>
+    (value: AppSettings[K]) => {
+      void update({ [key]: value } as Partial<AppSettings>);
+    };
 
   // Сессия на сайте могла истечь между запусками — сверяемся при открытии
   // экрана, чтобы не показывать «Вход выполнен» для протухшей сессии.
@@ -35,7 +52,7 @@ export const SettingsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomSpace + spacing.xl }]}>
         <Text style={styles.screenTitle}>Настройки</Text>
 
         <Section title="Платформы" hint="Выключенные не участвуют в поиске и ленте">
@@ -81,26 +98,134 @@ export const SettingsScreen: React.FC = () => {
             title="Нативный плеер"
             hint="Играть HLS напрямую там, где платформа отдаёт поток. Выключите, если видео не запускается — всё пойдёт через веб-плеер платформы."
             value={settings.preferNativePlayer}
-            onChange={(value) => {
-              void setPreferNativePlayer(value);
-            }}
+            onChange={set('preferNativePlayer')}
+          />
+          <ToggleRow
+            title="Продолжать с места остановки"
+            hint="Открытое повторно видео стартует с той секунды, на которой вы его закрыли."
+            value={settings.resumePlayback}
+            onChange={set('resumePlayback')}
+          />
+          <ToggleRow
+            title="Автовоспроизведение"
+            hint="После ролика запускается следующий из списка, откуда вы его открыли."
+            value={settings.autoplayNext}
+            onChange={set('autoplayNext')}
+          />
+          <ChoiceRow
+            title="Скорость по умолчанию"
+            value={settings.defaultRate === 1 ? 'Обычная' : `${settings.defaultRate}×`}
+            onPress={() => setChoice('rate')}
+          />
+          <ChoiceRow
+            title="Максимальное качество"
+            value={settings.preferredQuality === 'auto' ? 'Авто' : `${settings.preferredQuality}p`}
+            onPress={() => setChoice('quality')}
+          />
+          <ChoiceRow
+            title="Шаг перемотки"
+            value={`${settings.seekStepSec} сек`}
+            onPress={() => setChoice('seekStep')}
+          />
+          <ToggleRow
+            title="Жесты в плеере"
+            hint="Двойной тап — перемотка, удержание — ускорение, вертикальный свайп в полноэкранном режиме — громкость и затемнение."
+            value={settings.playerGestures}
+            onChange={set('playerGestures')}
+          />
+        </Section>
+
+        <Section title="Фон и окно">
+          <ToggleRow
+            title="Фоновое воспроизведение"
+            hint="Звук продолжает идти после сворачивания приложения, в шторке появляется уведомление с управлением."
+            value={settings.backgroundPlayback}
+            onChange={set('backgroundPlayback')}
+          />
+          <ToggleRow
+            title="Картинка в картинке"
+            hint="При выходе из приложения видео сворачивается в плавающее окно поверх других приложений."
+            value={settings.pictureInPicture}
+            onChange={set('pictureInPicture')}
           />
         </Section>
 
         <Section title="Приватность">
           <ToggleRow
             title="История просмотров"
-            hint="Хранится только на устройстве и никуда не отправляется."
+            hint="Хранится только на устройстве и никуда не отправляется. Без неё не работает продолжение просмотра."
             value={settings.historyEnabled}
-            onChange={(value) => {
-              void setHistoryEnabled(value);
-            }}
+            onChange={set('historyEnabled')}
           />
         </Section>
+
+        <View style={styles.about}>
+          <Logo size={56} />
+          <Text style={styles.aboutName}>RusVid</Text>
+          <Text style={styles.aboutTagline}>Rutube · VK Видео · Sasflix</Text>
+        </View>
       </ScrollView>
+
+      <Sheet visible={choice === 'rate'} title="Скорость по умолчанию" onClose={() => setChoice(null)}>
+        {PLAYBACK_RATES.map((rate) => (
+          <SheetRow
+            key={rate}
+            label={rate === 1 ? 'Обычная' : `${rate}×`}
+            selected={settings.defaultRate === rate}
+            onPress={() => {
+              set('defaultRate')(rate);
+              setChoice(null);
+            }}
+          />
+        ))}
+      </Sheet>
+
+      <Sheet visible={choice === 'quality'} title="Максимальное качество" onClose={() => setChoice(null)}>
+        {QUALITY_PREFERENCES.map((quality) => (
+          <SheetRow
+            key={String(quality)}
+            label={quality === 'auto' ? 'Авто' : `${quality}p`}
+            value={quality === 'auto' ? 'по скорости сети' : undefined}
+            selected={settings.preferredQuality === quality}
+            onPress={() => {
+              set('preferredQuality')(quality as QualityPreference);
+              setChoice(null);
+            }}
+          />
+        ))}
+      </Sheet>
+
+      <Sheet visible={choice === 'seekStep'} title="Шаг перемотки" onClose={() => setChoice(null)}>
+        {SEEK_STEPS.map((step) => (
+          <SheetRow
+            key={step}
+            label={`${step} секунд`}
+            selected={settings.seekStepSec === step}
+            onPress={() => {
+              set('seekStepSec')(step);
+              setChoice(null);
+            }}
+          />
+        ))}
+      </Sheet>
     </SafeAreaView>
   );
 };
+
+/** Строка настройки с выбором из списка — значение справа, выбор в шторке. */
+const ChoiceRow: React.FC<{
+  readonly title: string;
+  readonly value: string;
+  readonly onPress: () => void;
+}> = ({ title, value, onPress }) => (
+  <Pressable style={styles.navRow} accessibilityRole="button" onPress={onPress}>
+    <View style={styles.rowText}>
+      <Text style={styles.rowTitle}>{title}</Text>
+    </View>
+    <Text style={styles.rowValue}>{value}</Text>
+    <Icon name="chevronRight" size={18} color={colors.textMuted} />
+  </Pressable>
+);
 
 interface ProviderRowProps {
   readonly provider: VideoProvider;
@@ -278,6 +403,10 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
   },
+  rowValue: {
+    ...typography.caption,
+    color: colors.textMuted,
+  },
   authRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -294,5 +423,18 @@ const styles = StyleSheet.create({
   authButton: {
     minHeight: 36,
     paddingHorizontal: spacing.md,
+  },
+  about: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+  },
+  aboutName: {
+    ...typography.subtitle,
+    color: colors.textSecondary,
+  },
+  aboutTagline: {
+    ...typography.caption,
+    color: colors.textMuted,
   },
 });

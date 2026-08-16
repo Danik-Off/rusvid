@@ -1,0 +1,4 @@
+<resources>
+    <!-- Фон окна до первого кадра RN; совпадает с colors.background в src/ui/theme.ts. -->
+    <color name="splash_background">#0B0D12</color>
+</resources>

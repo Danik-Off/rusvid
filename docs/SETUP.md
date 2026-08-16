@@ -66,7 +66,8 @@ npm install
 | `npm start` | Metro-бандлер |
 | `npm run android` | debug-сборка + установка на устройство/эмулятор |
 | `npm run android:release` | release-сборка + установка |
-| `npm run build:apk` | APK в `android/app/build/outputs/apk/release/` |
+| `npm run build:apk` | APK под `arm64-v8a` и `armeabi-v7a` в `android/app/build/outputs/apk/release/` |
+| `npm run build:apk:all` | то же, но со всеми ABI, включая x86 для эмулятора |
 | `npm run build:bundle` | AAB для Play Console |
 | `npm run clean:android` | `gradlew clean` |
 | `npm test` | юнит-тесты |
@@ -92,29 +93,51 @@ npm run android
 
 ## Размер APK
 
-Собранный `app-release.apk` — около **66 МБ**: это универсальный APK со всеми
-ABI (`arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`) и без минификации.
-Для реального устройства размер уменьшается втрое двумя настройками
-в `android/app/build.gradle`:
+`npm run build:apk` кладёт в `android/app/build/outputs/apk/release/` два
+файла — по одному на ABI:
 
-```groovy
-def enableProguardInReleaseBuilds = true   // минификация Java/Kotlin
+| APK | Размер |
+|---|---|
+| `app-arm64-v8a-release.apk` | ~20 МБ |
+| `app-armeabi-v7a-release.apk` | ~16 МБ |
 
-android {
-    splits {
-        abi {
-            enable true
-            reset()
-            include 'arm64-v8a', 'armeabi-v7a'
-            universalApk false
-        }
-    }
-}
+Раньше это был один универсальный APK на **75 МБ**. Откуда взялась разница
+(цифры — arm64):
+
+| Настройка в `android/app/build.gradle` | Что даёт |
+|---|---|
+| `splits { abi { … universalApk false } }` | нативка одной ABI вместо четырёх: 59 → 15 МБ |
+| `enableProguardInReleaseBuilds = true` | R8 выбрасывает неиспользуемый androidx/media3/OkHttp: dex 22 → 4 МБ |
+| `shrinkResources true` | ресурсы без ссылок из кода: `res` + `resources.arsc` 2,5 → 1,1 МБ |
+| `androidResources { localeFilters }` | переводы только `ru`/`en` вместо ~80 языков |
+
+Какие ABI собирать, решает свойство `reactNativeArchitectures`. В
+`gradle.properties` перечислены все четыре, чтобы работал x86-эмулятор;
+`build:apk` и релизный CI передают только телефонные:
+
+```powershell
+npm run build:apk       # arm64-v8a + armeabi-v7a
+npm run build:apk:all   # все четыре ABI, включая x86 для эмулятора
 ```
 
-Обе включены **не по умолчанию**: ProGuard требует прогонки приложения на
-устройстве (правила для нативных модулей), а ABI-splits дают несколько APK
-вместо одного, что менее удобно для ручной установки.
+### Если минификация что-то сломает
+
+R8 переименовывает классы, и код, который ищет класс по имени, ломается
+молча — в рантайме, а не на сборке. Правила `keep` для React Native, media3,
+OkHttp и AndroidX лежат внутри их же AAR (consumer-rules), поэтому
+[`android/app/proguard-rules.pro`](../android/app/proguard-rules.pro) почти
+пуст. Самый нужный случай уже покрыт: `HlsMediaSource$Factory` сохраняется
+по имени, а CI проверяет его наличие в готовом APK.
+
+Расшифровать стек-трейс из release-краша:
+
+```powershell
+& "$env:ANDROID_HOME\cmdline-tools\latest\bin\retrace.bat" `
+    android\app\build\outputs\mapping\release\mapping.txt trace.txt
+```
+
+`mapping.txt` перезаписывается каждой сборкой — для выпущенной версии его
+стоит сохранить до того, как соберёте следующую.
 
 ## Версия приложения
 

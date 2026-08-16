@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="RusVid">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1B2233"/>
+      <stop offset="1" stop-color="#0A0D14"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="0.15" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#8FB2FF"/>
+      <stop offset="1" stop-color="#4A74FF"/>
+    </linearGradient>
+  </defs>
+  <rect x="10" y="10" width="236" height="236" rx="58" fill="url(#tile)"/>
+  <rect x="10.75" y="10.75" width="234.5" height="234.5" rx="57.25" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="1.5"/>
+  <path d="M88.42 71.32L109.22 82.85A4.16 4.16 0 0 1 111.36 86.49L111.36 169.51A4.16 4.16 0 0 1 109.22 173.15L88.42 184.68A4.16 4.16 0 0 1 82.24 181.04L82.24 74.96A4.16 4.16 0 0 1 88.42 71.32Z" fill="url(#mark)"/>
+  <path d="M125.86 92.08L142.5 101.3A4.16 4.16 0 0 1 144.64 104.94L144.64 151.06A4.16 4.16 0 0 1 142.5 154.7L125.86 163.92A4.16 4.16 0 0 1 119.68 160.29L119.68 95.71A4.16 4.16 0 0 1 125.86 92.08Z" fill="url(#mark)"/>
+  <path d="M159.14 110.53L184.1 124.36A4.16 4.16 0 0 1 184.1 131.64L159.14 145.47A4.16 4.16 0 0 1 152.96 141.84L152.96 114.16A4.16 4.16 0 0 1 159.14 110.53Z" fill="url(#mark)"/>
+</svg>

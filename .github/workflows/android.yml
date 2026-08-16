@@ -84,10 +84,14 @@ jobs:
           VARIANT: ${{ inputs.variant || 'debug' }}
         run: |
           chmod +x gradlew
+          # Проверочной сборке хватает одной ABI: остальные собираются из тех же
+          # исходников теми же тулчейнами и втрое удлиняют прогон.
+          # Релиз собирает arm64-v8a + armeabi-v7a — см. release.yml.
+          ARCH=-PreactNativeArchitectures=arm64-v8a
           if [ "$VARIANT" = "release" ]; then
-            ./gradlew assembleRelease --no-daemon --stacktrace
+            ./gradlew assembleRelease "$ARCH" --no-daemon --stacktrace
           else
-            ./gradlew assembleDebug --no-daemon --stacktrace
+            ./gradlew assembleDebug "$ARCH" --no-daemon --stacktrace
           fi
 
       - name: Проверить, что HLS попал в APK
@@ -95,9 +99,11 @@ jobs:
         # а не только конфигурацию.
         run: |
           set -euo pipefail
-          APK=$(find android/app/build/outputs/apk -name '*.apk' | head -n 1)
-          echo "APK: $APK"
-          unzip -p "$APK" classes.dex | grep -qa 'androidx/media3/exoplayer/hls' \
+          APK=$(find android/app/build/outputs/apk -name '*arm64-v8a*.apk' | head -n 1)
+          echo "APK: $APK ($(du -h "$APK" | cut -f1))"
+          # classes*.dex, а не classes.dex: R8 в release-сборке волен разложить
+          # классы по dex-файлам иначе, чем неминифицированный debug.
+          unzip -p "$APK" 'classes*.dex' | grep -qa 'androidx/media3/exoplayer/hls' \
             || { echo '::error::В APK нет классов ExoPlayer HLS'; exit 1; }
 
       - name: Загрузить APK как артефакт

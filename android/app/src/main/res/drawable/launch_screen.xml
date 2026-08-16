@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Окно до первого кадра React Native. Без него на светлой теме системы
+  между запуском и монтированием JS проскакивает белая вспышка.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splash_background"/>
+    <item
+        android:gravity="center"
+        android:width="132dp"
+        android:height="132dp"
+        android:drawable="@drawable/ic_logo"/>
+</layer-list>

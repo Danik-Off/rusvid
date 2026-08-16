@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img" aria-label="RusVid">
+  <defs>
+    <linearGradient id="mark" x1="0.15" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#8FB2FF"/>
+      <stop offset="1" stop-color="#4A74FF"/>
+    </linearGradient>
+  </defs>
+  <path d="M28.97 20.75L38.97 26.29A2 2 0 0 1 40 28.04L40 67.96A2 2 0 0 1 38.97 69.71L28.97 75.25A2 2 0 0 1 26 73.5L26 22.5A2 2 0 0 1 28.97 20.75Z" fill="url(#mark)"/>
+  <path d="M46.97 30.73L54.97 35.16A2 2 0 0 1 56 36.91L56 59.09A2 2 0 0 1 54.97 60.84L46.97 65.27A2 2 0 0 1 44 63.52L44 32.48A2 2 0 0 1 46.97 30.73Z" fill="url(#mark)"/>
+  <path d="M62.97 39.6L74.97 46.25A2 2 0 0 1 74.97 49.75L62.97 56.4A2 2 0 0 1 60 54.65L60 41.35A2 2 0 0 1 62.97 39.6Z" fill="url(#mark)"/>
+</svg>
