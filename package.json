@@ -2,6 +2,7 @@
   "name": "rusvid",
   "version": "1.3.0",
   "private": true,
+  "license": "MIT",
   "description": "Локальный агрегатор российских видеоплатформ (Rutube, VK Video, Sasflix)",
   "scripts": {
     "start": "react-native start",
