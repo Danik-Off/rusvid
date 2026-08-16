@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 import { getAppContainer } from '../../app/container/AppContainer';
 import type { CursorMap, ProviderFailure } from '../../core/aggregator/AggregatorService';
-import { ProviderError } from '../../core/errors/ProviderError';
+import { ProviderError, type ProviderErrorCode } from '../../core/errors/ProviderError';
 import type { Category, ProviderId, VideoSummary } from '../../core/model/media';
 import type { VideoProvider } from '../../core/provider/VideoProvider';
 import { useSettingsStore } from '../settings/settingsStore';
@@ -27,6 +27,7 @@ interface FeedState {
   readonly failures: readonly ProviderFailure[];
   readonly status: Status;
   readonly error: string | null;
+  readonly errorCode: ProviderErrorCode | null;
   readonly hasMore: boolean;
 
   refresh: () => Promise<void>;
@@ -46,13 +47,14 @@ export const useFeedStore = create<FeedState>((set, get) => ({
   failures: [],
   status: 'idle',
   error: null,
+  errorCode: null,
   hasMore: false,
 
   refresh: async () => {
     inFlight?.abort();
     const controller = new AbortController();
     inFlight = controller;
-    set({ status: 'loading', error: null, items: [], cursors: {}, failures: [] });
+    set({ status: 'loading', error: null, errorCode: null, items: [], cursors: {}, failures: [] });
 
     try {
       const result = await runFeed(get(), {}, controller.signal);
@@ -70,7 +72,8 @@ export const useFeedStore = create<FeedState>((set, get) => ({
       if (controller.signal.aborted) {
         return;
       }
-      set({ status: 'error', error: ProviderError.from(error).message });
+      const failure = ProviderError.from(error);
+      set({ status: 'error', error: failure.message, errorCode: failure.code });
     }
   },
 

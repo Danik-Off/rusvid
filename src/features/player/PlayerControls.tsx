@@ -67,12 +67,45 @@ export const PlayerControls: React.FC<Props> = ({
   title,
 }) => {
   const insets = useSafeAreaInsets();
-  const player = usePlayerStore();
   const gesturesEnabled = useSettingsStore((state) => state.settings.playerGestures);
   const seekStep = useSettingsStore((state) => state.settings.seekStepSec);
 
+  /**
+   * Подписки точечные, а не `usePlayerStore()` целиком.
+   *
+   * Позиция воспроизведения обновляется дважды в секунду, и подписка на весь
+   * стор перерисовывала бы вместе с ней весь слой управления — тридцать с
+   * лишним элементов, даже когда они скрыты и пользователь просто смотрит
+   * кадр. Всё, что меняется вместе с позицией, вынесено в `PlayerProgress`.
+   */
+  const locked = usePlayerStore((state) => state.locked);
+  const setLocked = usePlayerStore((state) => state.setLocked);
+  const paused = usePlayerStore((state) => state.paused);
+  const ended = usePlayerStore((state) => state.ended);
+  const buffering = usePlayerStore((state) => state.buffering);
+  const dim = usePlayerStore((state) => state.dim);
+  const rate = usePlayerStore((state) => state.rate);
+  const sleepTimerOn = usePlayerStore((state) => state.sleepTimer.kind !== 'off');
+  const queueIndex = usePlayerStore((state) => state.queueIndex);
+  const isLastInQueue = usePlayerStore((state) => state.queueIndex >= state.queue.length - 1);
+  // Булево, а не сама позиция: значение меняется один раз за ролик, поэтому
+  // подписка не тянет за собой перерисовку на каждом тике.
+  const canRestart = usePlayerStore((state) => state.positionSec > 5);
+  const hasPendingNext = usePlayerStore((state) => state.pendingNext !== null);
+  const togglePlay = usePlayerStore((state) => state.togglePlay);
+  const playNext = usePlayerStore((state) => state.playNext);
+  const playPrevious = usePlayerStore((state) => state.playPrevious);
+  const seekBy = usePlayerStore((state) => state.seekBy);
+
   const [visible, setVisible] = useState(true);
-  const [scrubSec, setScrubSec] = useState<number | null>(null);
+  /**
+   * Перемотка полосой: куда ведём палец и откуда начали.
+   *
+   * `from` запоминается один раз в начале жеста через `getState()` — иначе
+   * ради одной подписи «+1:20» пришлось бы подписаться на позицию и вернуть
+   * ту самую перерисовку дважды в секунду, от которой всё это и уезжало.
+   */
+  const [scrub, setScrub] = useState<{ readonly sec: number; readonly from: number } | null>(null);
   const [precision, setPrecision] = useState<number | null>(null);
   const [boost, setBoost] = useState(false);
   const [seekHint, setSeekHint] = useState<{ side: 'left' | 'right'; amount: number } | null>(null);
@@ -102,7 +135,16 @@ export const PlayerControls: React.FC<Props> = ({
         clearTimeout(hideTimer.current);
       }
     };
-  }, [show, player.paused, player.ended]);
+  }, [show, paused, ended]);
+
+  const handleScrub = useCallback((sec: number | null) => {
+    setScrub((current) => {
+      if (sec === null) {
+        return null;
+      }
+      return { sec, from: current?.from ?? usePlayerStore.getState().positionSec };
+    });
+  }, []);
 
   useEffect(() => {
     Animated.timing(fade, {
@@ -136,14 +178,14 @@ export const PlayerControls: React.FC<Props> = ({
    * смысл теряется. Кнопка снятия прячется по тому же таймеру, что и остальное,
    * чтобы кадр оставался чистым.
    */
-  if (player.locked) {
+  if (locked) {
     return (
       <View style={styles.fill}>
         <Pressable style={styles.fill} onPress={show} accessibilityLabel="Показать снятие блокировки" />
         <Animated.View pointerEvents={visible ? 'box-none' : 'none'} style={[styles.lockLayer, { opacity: fade }]}>
           <Pressable
             onPress={() => {
-              player.setLocked(false);
+              setLocked(false);
               show();
             }}
             accessibilityRole="button"
@@ -157,8 +199,6 @@ export const PlayerControls: React.FC<Props> = ({
     );
   }
 
-  const shownSec = scrubSec ?? player.positionSec;
-  const remaining = Math.max(0, player.durationSec - shownSec);
   // В полноэкранном режиме нижний ряд обязан обойти системную навигацию,
   // в обычном её просто нет под кадром.
   const bottomPadding = fullscreen ? insets.bottom + spacing.xs : 0;
@@ -175,11 +215,9 @@ export const PlayerControls: React.FC<Props> = ({
 
       {/* Программная «яркость»: системную без нативного модуля не тронуть,
           а затемнить кадр в тёмной комнате пользователю нужно всё равно. */}
-      {player.dim > 0 ? (
-        <View pointerEvents="none" style={[styles.dim, { opacity: player.dim }]} />
-      ) : null}
+      {dim > 0 ? <View pointerEvents="none" style={[styles.dim, { opacity: dim }]} /> : null}
 
-      {player.buffering && !player.ended ? (
+      {buffering && !ended ? (
         <View pointerEvents="none" style={styles.centered}>
           <ActivityIndicator size="large" color={colors.white} />
         </View>
@@ -212,12 +250,10 @@ export const PlayerControls: React.FC<Props> = ({
 
       {/* Пока идёт перемотка — крупное время по центру кадра и текущая
           точность: смотреть на цифры в углу, ведя палец, невозможно. */}
-      {scrubSec !== null ? (
+      {scrub !== null ? (
         <View pointerEvents="none" style={styles.scrubPreview}>
-          <Text style={styles.scrubTime}>{formatClock(scrubSec)}</Text>
-          <Text style={styles.scrubDelta}>
-            {formatSignedSeconds(scrubSec - player.positionSec)}
-          </Text>
+          <Text style={styles.scrubTime}>{formatClock(scrub.sec)}</Text>
+          <Text style={styles.scrubDelta}>{formatSignedSeconds(scrub.sec - scrub.from)}</Text>
           {precision !== null && precision < 1 ? (
             <Text style={styles.scrubPrecision}>{`точность ×${1 / precision}`}</Text>
           ) : null}
@@ -250,14 +286,14 @@ export const PlayerControls: React.FC<Props> = ({
           ) : (
             <View style={styles.flexSpacer} />
           )}
-          {player.sleepTimer.kind !== 'off' ? (
+          {sleepTimerOn ? (
             <View style={styles.badge}>
               <Icon name="timer" size={12} color={colors.white} />
             </View>
           ) : null}
-          {player.rate !== 1 ? (
+          {rate !== 1 ? (
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>{String(player.rate).replace('.', ',')}×</Text>
+              <Text style={styles.badgeText}>{String(rate).replace('.', ',')}×</Text>
             </View>
           ) : null}
           {/* Блокировка только в полноэкранном режиме: в обычном под кадром
@@ -267,7 +303,7 @@ export const PlayerControls: React.FC<Props> = ({
               icon="lockOpen"
               label="Заблокировать управление"
               size={20}
-              onPress={() => player.setLocked(true)}
+              onPress={() => setLocked(true)}
             />
           ) : null}
           <ControlButton icon="more" label="Настройки плеера" onPress={onOpenSettings} />
@@ -278,22 +314,22 @@ export const PlayerControls: React.FC<Props> = ({
             icon="skipPrevious"
             label="Предыдущее видео"
             size={26}
-            disabled={player.queueIndex <= 0 && player.positionSec <= 5}
-            onPress={player.playPrevious}
+            disabled={queueIndex <= 0 && !canRestart}
+            onPress={playPrevious}
           />
           <ControlButton
             icon="rewind"
             label={`Назад на ${seekStep} секунд`}
             size={26}
-            onPress={() => player.seekBy(-seekStep)}
+            onPress={() => seekBy(-seekStep)}
           />
           <Pressable
-            onPress={player.togglePlay}
+            onPress={togglePlay}
             accessibilityRole="button"
-            accessibilityLabel={player.paused ? 'Воспроизвести' : 'Пауза'}
+            accessibilityLabel={paused ? 'Воспроизвести' : 'Пауза'}
             style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}>
             <Icon
-              name={player.ended ? 'refresh' : player.paused ? 'playFilled' : 'pause'}
+              name={ended ? 'refresh' : paused ? 'playFilled' : 'pause'}
               size={30}
               color={colors.white}
             />
@@ -302,52 +338,105 @@ export const PlayerControls: React.FC<Props> = ({
             icon="forward"
             label={`Вперёд на ${seekStep} секунд`}
             size={26}
-            onPress={() => player.seekBy(seekStep)}
+            onPress={() => seekBy(seekStep)}
           />
           <ControlButton
             icon="skipNext"
             label="Следующее видео"
             size={26}
-            disabled={player.queueIndex >= player.queue.length - 1}
-            onPress={player.playNext}
+            disabled={isLastInQueue}
+            onPress={playNext}
           />
         </View>
 
-        <View style={[styles.bottomBar, { paddingBottom: bottomPadding }]}>
-          <View style={styles.timeRow}>
-            <Text style={styles.time}>{formatClock(shownSec)}</Text>
-            <Text style={styles.timeMuted}>{` / ${formatClock(player.durationSec)}`}</Text>
-            <View style={styles.flexSpacer} />
-            <Text style={styles.timeMuted}>{`−${formatClock(remaining)}`}</Text>
-            <ControlButton
-              icon={player.muted ? 'volumeOff' : 'volume'}
-              label={player.muted ? 'Включить звук' : 'Выключить звук'}
-              size={18}
-              onPress={() => player.setMuted(!player.muted)}
-            />
-            <ControlButton
-              icon={fullscreen ? 'fullscreenExit' : 'fullscreen'}
-              label={fullscreen ? 'Выйти из полноэкранного режима' : 'Полноэкранный режим'}
-              size={20}
-              onPress={onToggleFullscreen}
-            />
-          </View>
-          <Seekbar
-            positionSec={player.positionSec}
-            durationSec={player.durationSec}
-            bufferedSec={player.bufferedSec}
-            accentColor={accentColor}
-            onScrub={setScrubSec}
-            onPrecisionChange={setPrecision}
-            onSeek={(sec) => {
-              player.seekTo(sec);
-              show();
-            }}
-          />
-        </View>
+        <PlayerProgress
+          fullscreen={fullscreen}
+          accentColor={accentColor}
+          scrubSec={scrub?.sec ?? null}
+          bottomPadding={bottomPadding}
+          onScrub={handleScrub}
+          onPrecisionChange={setPrecision}
+          onToggleFullscreen={onToggleFullscreen}
+          onInteract={show}
+        />
       </Animated.View>
 
-      {player.pendingNext ? <UpNextCard /> : null}
+      {hasPendingNext ? <UpNextCard /> : null}
+    </View>
+  );
+};
+
+interface ProgressProps {
+  readonly fullscreen: boolean;
+  readonly accentColor: string;
+  /** Куда ведёт палец, если полосу сейчас тянут. */
+  readonly scrubSec: number | null;
+  readonly bottomPadding: number;
+  readonly onScrub: (sec: number | null) => void;
+  readonly onPrecisionChange: (precision: number | null) => void;
+  readonly onToggleFullscreen: () => void;
+  /** Любое действие продлевает жизнь элементам управления. */
+  readonly onInteract: () => void;
+}
+
+/**
+ * Время и полоса перемотки — всё, что живёт в такт позиции воспроизведения.
+ *
+ * Вынесено из `PlayerControls` именно поэтому: позиция приходит дважды в
+ * секунду, и подписка на неё обязана касаться как можно меньшего поддерева.
+ */
+const PlayerProgress: React.FC<ProgressProps> = ({
+  fullscreen,
+  accentColor,
+  scrubSec,
+  bottomPadding,
+  onScrub,
+  onPrecisionChange,
+  onToggleFullscreen,
+  onInteract,
+}) => {
+  const positionSec = usePlayerStore((state) => state.positionSec);
+  const durationSec = usePlayerStore((state) => state.durationSec);
+  const bufferedSec = usePlayerStore((state) => state.bufferedSec);
+  const muted = usePlayerStore((state) => state.muted);
+  const setMuted = usePlayerStore((state) => state.setMuted);
+  const seekTo = usePlayerStore((state) => state.seekTo);
+
+  const shownSec = scrubSec ?? positionSec;
+  const remaining = Math.max(0, durationSec - shownSec);
+
+  return (
+    <View style={[styles.bottomBar, { paddingBottom: bottomPadding }]}>
+      <View style={styles.timeRow}>
+        <Text style={styles.time}>{formatClock(shownSec)}</Text>
+        <Text style={styles.timeMuted}>{` / ${formatClock(durationSec)}`}</Text>
+        <View style={styles.flexSpacer} />
+        <Text style={styles.timeMuted}>{`−${formatClock(remaining)}`}</Text>
+        <ControlButton
+          icon={muted ? 'volumeOff' : 'volume'}
+          label={muted ? 'Включить звук' : 'Выключить звук'}
+          size={18}
+          onPress={() => setMuted(!muted)}
+        />
+        <ControlButton
+          icon={fullscreen ? 'fullscreenExit' : 'fullscreen'}
+          label={fullscreen ? 'Выйти из полноэкранного режима' : 'Полноэкранный режим'}
+          size={20}
+          onPress={onToggleFullscreen}
+        />
+      </View>
+      <Seekbar
+        positionSec={positionSec}
+        durationSec={durationSec}
+        bufferedSec={bufferedSec}
+        accentColor={accentColor}
+        onScrub={onScrub}
+        onPrecisionChange={onPrecisionChange}
+        onSeek={(sec) => {
+          seekTo(sec);
+          onInteract();
+        }}
+      />
     </View>
   );
 };

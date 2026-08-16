@@ -4,6 +4,7 @@ import { getAppContainer } from '../../app/container/AppContainer';
 import { LEGAL_VERSION } from '../../core/legal/legalText';
 import type { ProviderId } from '../../core/model/media';
 import { DEFAULT_SETTINGS, type AppSettings } from '../../data/settings/AppSettings';
+import { webSession } from '../../providers/shared/webSession';
 
 interface SettingsState {
   readonly settings: AppSettings;
@@ -85,7 +86,23 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ clientIds: snapshotClientIds() });
   },
 
+  /**
+   * Выход из платформы.
+   *
+   * Порядок важен: сначала гасим cookie сайта, потом забываем свою отметку.
+   * Раньше здесь было только второе — и выход не работал: cookie оставались,
+   * а ближайшая `verifyAllSessions()` (она идёт при каждом открытии настроек)
+   * находила живую сессию и возвращала «Вход выполнен». Пользователь при этом
+   * был уверен, что вышел.
+   *
+   * Если очистка не удалась, отметку НЕ трогаем: показать «вы вышли», оставив
+   * сессию на месте, — худший из возможных исходов.
+   */
   signOut: async (id) => {
+    const { auth } = getAppContainer().registry.get(id);
+    if (auth.kind === 'webLogin') {
+      await webSession.clearCookies(auth.sessionOrigins);
+    }
     await getAppContainer().credentials.signOut(id);
     set({ signedIn: snapshotSignedIn() });
   },

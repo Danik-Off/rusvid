@@ -12,6 +12,7 @@ import { LegalScreen } from '../../features/legal/LegalScreen';
 import { LibraryScreen } from '../../features/library/LibraryScreen';
 import { SearchScreen } from '../../features/search/SearchScreen';
 import { SettingsScreen } from '../../features/settings/SettingsScreen';
+import { useUpdateBadge } from '../../features/updates/updatesStore';
 import { Icon, type IconName } from '../../ui/components/Icon';
 import { TAB_BAR_BASE_HEIGHT } from '../../ui/layout';
 import { colors, spacing, typography } from '../../ui/theme';
@@ -46,6 +47,9 @@ const TabIcon: React.FC<{ readonly name: keyof TabParamList; readonly color: str
 
 const TabsNavigator: React.FC = () => {
   const insets = useSafeAreaInsets();
+  // Точка на «Настройках», когда вышла новая версия. Точка, а не число:
+  // обновление одно, и цифра «1» рядом с шестерёнкой ничего не добавляет.
+  const updateAvailable = useUpdateBadge();
 
   return (
     <Tab.Navigator
@@ -53,6 +57,8 @@ const TabsNavigator: React.FC = () => {
         headerShown: false,
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textMuted,
+        tabBarBadge: route.name === 'Settings' && updateAvailable ? '' : undefined,
+        tabBarBadgeStyle: styles.tabBadge,
         /**
          * Высота и нижний отступ считаются от системного inset, а не задаются
          * числом. С `edgeToEdgeEnabled=true` приложение рисуется под системной
@@ -111,6 +117,17 @@ const styles = StyleSheet.create({
   tabLabel: {
     ...typography.caption,
     fontSize: 11,
+  },
+  tabBadge: {
+    minWidth: 9,
+    maxWidth: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: colors.accent,
+    // Метка пустая: текста в ней нет, поэтому его метрики лишь ломали бы
+    // геометрию точки.
+    lineHeight: 9,
+    fontSize: 1,
   },
   headerTitle: {
     ...typography.subtitle,

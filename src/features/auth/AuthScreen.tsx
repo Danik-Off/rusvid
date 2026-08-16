@@ -22,6 +22,7 @@ import type { AuthScreenProps } from '../../app/navigation/types';
 import type { ProviderId } from '../../core/model/media';
 import type { OAuthSpec, WebLoginSpec } from '../../core/provider/auth';
 import { MOBILE_USER_AGENT } from '../../providers/shared/userAgent';
+import { webSession } from '../../providers/shared/webSession';
 import { Button } from '../../ui/components/Button';
 import { Icon } from '../../ui/components/Icon';
 import { ProviderBadge } from '../../ui/components/ProviderBadge';
@@ -78,6 +79,10 @@ const WebLoginFlow: React.FC<FlowProps<WebLoginSpec>> = ({ providerId, spec }) =
       const active = await verifySession(providerId);
       setChecking(false);
       if (active) {
+        // WebView сбрасывает cookie на диск лениво. Если приложение убить из
+        // недавних сразу после входа, свежая сессия не успевает сохраниться —
+        // дожимаем её здесь, пока пользователь ещё смотрит на экран входа.
+        webSession.flush();
         setBrowserOpen(false);
         navigation.goBack();
       } else if (!silent) {

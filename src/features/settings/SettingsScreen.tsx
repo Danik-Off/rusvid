@@ -1,7 +1,7 @@
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getAppContainer } from '../../app/container/AppContainer';
@@ -11,7 +11,6 @@ import type { ProviderId } from '../../core/model/media';
 import type { VideoProvider } from '../../core/provider/VideoProvider';
 import { Button } from '../../ui/components/Button';
 import { Icon } from '../../ui/components/Icon';
-import { Logo } from '../../ui/components/Logo';
 import { Sheet, SheetRow } from '../../ui/components/Sheet';
 import { colors, hitSlop, radius, spacing, typography } from '../../ui/theme';
 import {
@@ -21,6 +20,7 @@ import {
   type QualityPreference,
 } from '../../data/settings/AppSettings';
 import { useBottomSpace } from '../player/usePlayerLayout';
+import { UpdateCard } from '../updates/UpdateCard';
 import { useSettingsStore } from './settingsStore';
 
 const SEEK_STEPS = [5, 10, 15, 30];
@@ -72,7 +72,15 @@ export const SettingsScreen: React.FC = () => {
                 navigation.navigate('Auth', { providerId: provider.meta.id as ProviderId })
               }
               onSignOut={() => {
-                void signOut(provider.meta.id);
+                // Выход ходит в системное хранилище cookie и может не
+                // получиться. Молчаливый `void` здесь означал бы «кнопка
+                // нажата, ничего не произошло, никто не сказал почему».
+                void signOut(provider.meta.id).catch((error: unknown) => {
+                  Alert.alert(
+                    'Не удалось выйти',
+                    error instanceof Error ? error.message : 'Неизвестная ошибка',
+                  );
+                });
               }}
             />
           ))}
@@ -178,6 +186,10 @@ export const SettingsScreen: React.FC = () => {
             </View>
             <Icon name="chevronRight" size={18} color={colors.textMuted} />
           </Pressable>
+        </Section>
+
+        <Section title="О приложении">
+          <UpdateCard />
         </Section>
 
         <View style={styles.about}>

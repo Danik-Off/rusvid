@@ -7,6 +7,7 @@ import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.rusvid.screen.ScreenControlPackage
+import com.rusvid.web.WebSessionPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -15,9 +16,10 @@ class MainApplication : Application(), ReactApplication {
       context = applicationContext,
       packageList =
         PackageList(this).packages.apply {
-          // Собственный модуль приложения: автолинковка находит только пакеты
+          // Собственные модули приложения: автолинковка находит только пакеты
           // из node_modules, поэтому регистрируем руками.
           add(ScreenControlPackage())
+          add(WebSessionPackage())
         },
     )
   }

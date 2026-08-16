@@ -1,21 +1,17 @@
 /**
- * Живой смоук-тест провайдеров: реальные запросы к Rutube и Sasflix.
+ * Живой смоук-тест провайдеров: реальные запросы к Rutube, Sasflix и VK.
  *
  * По умолчанию ПРОПУСКАЕТСЯ — обычный `npm test` не ходит в сеть.
  * Запуск вручную, когда нужно проверить, не сломалось ли чужое API:
  *
  *     $env:RUSVID_LIVE = '1'; npm test -- live.smoke
- *
- * Содержательные списки VK проверить отсюда нельзя — они требуют сессии
- * живого пользователя. Зато проверяется главное: что endpoint вообще на
- * месте и что анонимный клиент опознаётся как анонимный.
  */
 
 import { CredentialsStore } from '../../data/credentials/CredentialsStore';
 import { InMemoryKeyValueStore } from '../../data/storage/KeyValueStore';
 import { RutubeProvider } from '../rutube/RutubeProvider';
 import { SasflixProvider } from '../sasflix/SasflixProvider';
-import { VkWebClient } from '../vk/VkWebClient';
+import { VkProvider } from '../vk/VkProvider';
 
 /** Провайдерам нужен CredentialsStore; в смоуке он пустой — вход не проверяем. */
 function anonymousCredentials(): CredentialsStore {
@@ -89,16 +85,72 @@ describeLive('Sasflix (живое API)', () => {
   });
 });
 
-describeLive('VK (живой веб-клиент)', () => {
-  /**
-   * Сторож против поломки, которая уже случалась: пока запросы уходили на
-   * `vkvideo.ru`, `POST /al_video.php` отвечал 404, и кнопка «Я вошёл» не
-   * могла сработать ни при каких условиях. Тест падает и на исчезнувшем
-   * endpoint'е (ошибка вместо ответа), и на смене формата (`statsMeta`
-   * пропал), то есть ровно на том, что ломает вход.
-   */
-  it('опознаёт анонимного клиента, а не падает и не «входит»', async () => {
-    await expect(new VkWebClient().probeSession()).resolves.toBe(false);
+/**
+ * Всё ниже выполняется БЕЗ входа: именно анонимный режим и есть то, что
+ * легко сломать незаметно — у разработчика с живой сессией VK эти же вызовы
+ * продолжали бы работать.
+ */
+describeLive('VK Видео (живое API, без входа)', () => {
+  const provider = new VkProvider(anonymousCredentials());
+
+  it('находит видео по запросу без всякой сессии', async () => {
+    const page = await provider.search({ query: 'кот' }, {});
+
+    expect(page.items.length).toBeGreaterThan(0);
+    expect(page.items[0].uid).toMatch(/^vk:-?\d+_\d+/);
+    // Кириллица в заголовках — сторож против возврата к windows-1251:
+    // шлюз отвечает UTF-8, и «????» здесь означали бы смену кодировки.
+    expect(page.items.some((item) => /[а-яё]/i.test(item.title))).toBe(true);
+  });
+
+  it('листает поиск дальше первой страницы', async () => {
+    const first = await provider.search({ query: 'музыка' }, {});
+    expect(first.nextCursor).not.toBeNull();
+
+    const second = await provider.search(
+      { query: 'музыка', cursor: first.nextCursor as string },
+      {},
+    );
+    expect(second.items.length).toBeGreaterThan(0);
+
+    const seen = new Set(first.items.map((item) => item.uid));
+    expect(second.items.some((item) => !seen.has(item.uid))).toBe(true);
+  });
+
+  it('отдаёт разделы витрины', async () => {
+    const categories = await provider.listCategories({});
+    expect(categories.length).toBeGreaterThan(5);
+  });
+
+  it('отдаёт ленту с авторами карточек', async () => {
+    const page = await provider.feed({ kind: 'trending' }, {});
+
+    expect(page.items.length).toBeGreaterThan(0);
+    expect(page.items.some((item) => Boolean(item.author?.name))).toBe(true);
+  });
+
+  it('отдаёт детали видео', async () => {
+    const page = await provider.feed({ kind: 'trending' }, {});
+    const details = await provider.getDetails(page.items[0].id, {});
+
+    expect(details.title).toBe(page.items[0].title);
+  });
+
+  it('разрешает ссылку на встроенный плеер', async () => {
+    const page = await provider.feed({ kind: 'trending' }, {});
+    const source = await provider.resolvePlayback({ id: page.items[0].id }, {});
+
+    expect(source.kind).toBe('embed');
+    expect(source.url).toMatch(/^https:\/\/vk\.com\/video_ext\.php\?/);
+
+    // Плеер обязан открываться анонимно: на этом держится воспроизведение
+    // без входа. Именно `vk.com` — `vkvideo.ru` уводит гостя на автологин.
+    const response = await fetch(source.url);
+    expect(response.status).toBe(200);
+  });
+
+  it('без сессии сайта опознаёт отсутствие входа, а не падает', async () => {
+    await expect(provider.verifySession({})).resolves.toBe(false);
   });
 });
 

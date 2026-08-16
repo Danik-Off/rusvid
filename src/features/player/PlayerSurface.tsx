@@ -47,8 +47,28 @@ export const PlayerSurface: React.FC<Props> = ({ source, onFailure }) => {
 
 const NativeSurface: React.FC<Props> = ({ source, onFailure }) => {
   const ref = useRef<VideoRef | null>(null);
-  const player = usePlayerStore();
   const settings = useSettingsStore((state) => state.settings);
+
+  /**
+   * Подписки точечные, а не `usePlayerStore()` целиком.
+   *
+   * Позиция воспроизведения меняется дважды в секунду и приходит СЮДА ЖЕ, из
+   * `onProgress`. С подпиской на весь стор компонент перерисовывал бы себя в
+   * ответ на собственное событие, пересобирая пропсы `<Video>` — при том что
+   * ни один из них от позиции не зависит.
+   */
+  const paused = usePlayerStore((state) => state.paused);
+  const rate = usePlayerStore((state) => state.rate);
+  const muted = usePlayerStore((state) => state.muted);
+  const volume = usePlayerStore((state) => state.volume);
+  const repeat = usePlayerStore((state) => state.repeat);
+  const resizeMode = usePlayerStore((state) => state.resizeMode);
+  const videoTracks = usePlayerStore((state) => state.videoTracks);
+  const selectedQuality = usePlayerStore((state) => state.quality);
+  const audioTrack = usePlayerStore((state) => state.audioTrack);
+  const textTrack = usePlayerStore((state) => state.textTrack);
+  const startPositionSec = usePlayerStore((state) => state.startPositionSec);
+  const current = usePlayerStore((state) => state.current);
 
   useEffect(() => {
     attachVideoRef(ref.current);
@@ -68,16 +88,16 @@ const NativeSurface: React.FC<Props> = ({ source, onFailure }) => {
     });
   }, []);
 
-  const quality = resolveQualityTrack(player.videoTracks, player.quality);
-  const { startPositionSec, current } = player;
+  const quality = resolveQualityTrack(videoTracks, selectedQuality);
 
   /**
    * Источник обязан быть мемоизирован.
    *
-   * Компонент перерисовывается дважды в секунду (позиция воспроизведения), а
    * `react-native-video` считает новый объект источника новым видео: без
-   * `useMemo` поток переоткрывался бы на каждом тике прогресса и не играл
-   * вообще. Зависимости стабильны в пределах ролика.
+   * `useMemo` поток переоткрывался бы на каждой перерисовке и не играл вообще.
+   * Точечные подписки выше убрали самую частую из них (позиция), но остаются
+   * смена громкости, качества и дорожек — каждой хватило бы, чтобы оборвать
+   * воспроизведение. Зависимости стабильны в пределах ролика.
    */
   const videoSource = useMemo(
     () => ({
@@ -112,12 +132,12 @@ const NativeSurface: React.FC<Props> = ({ source, onFailure }) => {
       style={styles.surface}
       // Свои элементы управления — системные не поддаются оформлению.
       controls={false}
-      paused={player.paused}
-      rate={player.rate}
-      muted={player.muted}
-      volume={player.volume}
-      repeat={player.repeat}
-      resizeMode={player.resizeMode}
+      paused={paused}
+      rate={rate}
+      muted={muted}
+      volume={volume}
+      repeat={repeat}
+      resizeMode={resizeMode}
       progressUpdateInterval={500}
       playInBackground={settings.backgroundPlayback}
       showNotificationControls={settings.backgroundPlayback}
@@ -129,14 +149,14 @@ const NativeSurface: React.FC<Props> = ({ source, onFailure }) => {
           : { type: SelectedVideoTrackType.RESOLUTION, value: quality.value }
       }
       selectedAudioTrack={
-        player.audioTrack === 'auto'
+        audioTrack === 'auto'
           ? { type: SelectedTrackType.SYSTEM }
-          : { type: SelectedTrackType.INDEX, value: player.audioTrack }
+          : { type: SelectedTrackType.INDEX, value: audioTrack }
       }
       selectedTextTrack={
-        player.textTrack === null
+        textTrack === null
           ? { type: SelectedTrackType.DISABLED }
-          : { type: SelectedTrackType.INDEX, value: player.textTrack }
+          : { type: SelectedTrackType.INDEX, value: textTrack }
       }
       onLoad={onLoad}
       onProgress={onProgress}

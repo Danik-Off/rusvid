@@ -3,6 +3,7 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
+import type { ProviderErrorCode } from '../../core/errors/ProviderError';
 import { colors, radius, spacing, typography } from '../theme';
 import { Button } from './Button';
 import { Icon, type IconName } from './Icon';
@@ -50,22 +51,45 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 
 interface ErrorViewProps {
   readonly message: string;
+  /**
+   * Код ошибки. Нужен, чтобы отличить «нет сети» от «платформа сломалась»:
+   * в метро человек жмёт «Повторить» впустую, потому что текст ошибки
+   * платформы ничего не говорит о том, что дело в соединении.
+   */
+  readonly code?: ProviderErrorCode;
   readonly onRetry?: () => void;
   readonly secondaryLabel?: string;
   readonly onSecondary?: () => void;
 }
 
+/** Сбой соединения — это про устройство и сеть, а не про платформу. */
+function isOffline(code: ProviderErrorCode | undefined): boolean {
+  return code === 'NETWORK' || code === 'TIMEOUT';
+}
+
 export const ErrorView: React.FC<ErrorViewProps> = ({
   message,
+  code,
   onRetry,
   secondaryLabel,
   onSecondary,
 }) => (
   <View style={styles.centered}>
-    <View style={[styles.iconHalo, styles.iconHaloDanger]}>
-      <Icon name="alert" size={30} color={colors.danger} />
+    <View style={[styles.iconHalo, isOffline(code) ? styles.iconHaloMuted : styles.iconHaloDanger]}>
+      <Icon
+        name={isOffline(code) ? 'refresh' : 'alert'}
+        size={30}
+        color={isOffline(code) ? colors.textMuted : colors.danger}
+      />
     </View>
-    <Text style={styles.errorTitle}>{message}</Text>
+    <Text style={styles.errorTitle}>{isOffline(code) ? 'Нет связи' : message}</Text>
+    {isOffline(code) ? (
+      <Text style={styles.caption}>
+        {code === 'TIMEOUT'
+          ? 'Сеть отвечает слишком медленно. Проверьте соединение и попробуйте снова.'
+          : 'Проверьте мобильный интернет или Wi-Fi — платформы тут ни при чём.'}
+      </Text>
+    ) : null}
     <View style={styles.actionRow}>
       {onRetry ? <Button label="Повторить" icon="refresh" onPress={onRetry} /> : null}
       {secondaryLabel && onSecondary ? (
@@ -128,6 +152,9 @@ const styles = StyleSheet.create({
   },
   iconHaloDanger: {
     backgroundColor: colors.dangerSoft,
+  },
+  iconHaloMuted: {
+    backgroundColor: colors.surfaceElevated,
   },
   footer: {
     paddingVertical: spacing.xl,

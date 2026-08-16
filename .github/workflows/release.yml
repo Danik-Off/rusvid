@@ -8,56 +8,50 @@ name: Release
 #   2. новая версия записывается в package.json и коммитится обратно в main —
 #      оттуда её берёт android/app/build.gradle, поэтому versionName,
 #      versionCode и тег не могут разъехаться;
-#   3. ставится тег v<version> и публикуется GitHub Release с заметками.
+#   3. workflow проверяет сборку, собирает release APK под arm64-v8a и
+#      armeabi-v7a, ставит тег v<version> и публикует GitHub Release с APK.
 #
-# Готовых APK релиз НЕ содержит и содержать не должен: проект опубликован как
-# исходный код, а не как продукт для установки (см. DISCLAIMER.md, раздел 3).
-# Собирается он локально — `npm run build:apk`. Проверочная сборка живёт в
-# android.yml: она подтверждает, что код собирается и HLS попал в APK, но
-# артефакт остаётся внутри CI и через две недели удаляется.
+# Проект опубликован как исходный код, а не как продукт для установки
+# (см. DISCLAIMER.md, раздел 3). Проверочная сборка живёт в android.yml: она
+# подтверждает, что код собирается и HLS попал в APK, но артефакт остаётся
+# внутри CI и через две недели удаляется.
 #
-# Шаг версии можно задать вручную: Actions -> Release -> Run workflow -> bump.
-# Отдельный push можно оставить без релиза, написав [skip release] в сообщении
-# коммита.
+# Любой другой push в main сборку не запускает: пока версия та же, релизить
+# нечего. Перевыпустить уже выпущенную версию нельзя — тег на неё стоит.
+#
+# Любой другой push в main сборку не запускает: пока версия та же, релизить
+# нечего. Перевыпустить уже выпущенную версию нельзя — тег на неё стоит.
 on:
   push:
     branches: [main]
-    paths-ignore:
-      # Правки текста и самого CI новую версию не выпускают.
-      - '**/*.md'
-      - 'docs/**'
-      - '.github/**'
-      - '.gitignore'
-      - '.editorconfig'
+    paths:
+      # Версия живёт здесь, поэтому и триггер один. Правки package.json без
+      # изменения версии (зависимости, скрипты) job «Проверить версию»
+      # отсеет — до сборки дело не дойдёт.
+      - package.json
+  # Ручной запуск — на случай, если релиз упал на середине: версия в
+  # package.json уже поднята, а тега ещё нет.
   workflow_dispatch:
-    inputs:
-      bump:
-        description: Шаг версии
-        type: choice
-        options: [auto, patch, minor, major]
-        default: auto
 
 permissions:
-  contents: write # нужно для коммита версии, тега и релиза
+  contents: write # нужно для тега и релиза
 
 concurrency:
-  # Релизы не параллелим: два прогона подрались бы за тег и за push в main.
+  # Релизы не параллелим: два прогона подрались бы за один тег.
   group: release
   cancel-in-progress: false
 
 jobs:
   version:
-    name: Вычислить версию
+    name: Проверить версию
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.head_commit.message, '[skip release]') }}
     outputs:
-      version: ${{ steps.next.outputs.version }}
-      should_release: ${{ steps.next.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+      should_release: ${{ steps.check.outputs.should_release }}
     steps:
       - uses: actions/checkout@v4
         with:
-          # Нужна вся история и все теги: версия считается по коммитам с
-          # последнего тега.
+          # Нужны все теги: по ним и определяется, выпускали ли уже эту версию.
           fetch-depth: 0
           fetch-tags: true
 
@@ -65,10 +59,8 @@ jobs:
         with:
           node-version: 22
 
-      - id: next
-        env:
-          BUMP: ${{ inputs.bump || 'auto' }}
-        run: node tools/next-version.mjs >> "$GITHUB_OUTPUT"
+      - id: check
+        run: node tools/release-version.mjs >> "$GITHUB_OUTPUT"
 
   release:
     name: Зафиксировать версию
@@ -82,7 +74,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Полная история нужна, чтобы коммит с версией лёг поверх main.
+          # Полная история и теги: тег ставится отсюда же.
           fetch-depth: 0
           fetch-tags: true
 
@@ -98,16 +90,96 @@ jobs:
         # после npm ci, иначе ci ругнулся бы на рассинхрон.
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
-      - name: Проверки перед тегом
-        # Тег не должен уезжать со сломанными типами или красными тестами.
+      - name: Проверки перед релизом
+        # Релиз не должен уезжать со сломанными типами или красными тестами.
         run: |
           npm run typecheck
           npm run lint
           npm test -- --ci --reporters=default
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+
+      - name: Компоненты SDK
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-37.0" \
+            "build-tools;37.0.0" \
+            "ndk;27.1.12297006" \
+            "cmake;3.22.1"
+
+      - name: Кэш Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Сборка release APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          # Только «телефонные» ABI: x86/x86_64 нужны эмулятору, а не тем, кто
+          # ставит APK из релиза. Сборка разделена по ABI (splits в build.gradle),
+          # поэтому на выходе два APK, а не один универсальный на 75 МБ.
+          ./gradlew assembleRelease \
+            -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
+            --no-daemon --stacktrace
+
+      - name: Проверить APK
+        # Сборка без media3-exoplayer-hls зелёная, но видео в ней не играет —
+        # проверяем артефакт, а не только конфигурацию.
+        run: |
+          set -euo pipefail
+          out=android/app/build/outputs/apk/release
+
+          # aapt2 лежит в build-tools и на PATH не выносится — ищем явно,
+          # иначе шаг падает с «command not found» уже после часовой сборки.
+          aapt2=$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" -name aapt2 -type f | sort | tail -n 1)
+          [ -x "$aapt2" ] || { echo "::error::aapt2 не найден в build-tools"; exit 1; }
+
+          for abi in arm64-v8a armeabi-v7a; do
+            APK="$out/app-$abi-release.apk"
+            [ -f "$APK" ] || { echo "::error::Не собран APK для $abi"; exit 1; }
+
+            # classes*.dex: R8 волен разложить классы по dex-файлам как угодно,
+            # HlsMediaSource$Factory сохраняется по имени consumer-правилами media3.
+            #
+            # grep -c, а не -q: -q закрывает поток на первом совпадении, unzip
+            # получает SIGPIPE, и pipefail превращает успешную проверку в
+            # падение шага. Именно на этом умирали релизы 1.0.1 и 1.1.0.
+            hls=$(unzip -p "$APK" 'classes*.dex' | grep -ac 'androidx/media3/exoplayer/hls' || true)
+            [ "$hls" -gt 0 ] || { echo "::error::В APK $abi нет классов ExoPlayer HLS"; exit 1; }
+
+            version_name=$("$aapt2" dump badging "$APK" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
+            [ "$version_name" = "$VERSION" ] \
+              || { echo "::error::versionName APK $abi ($version_name) не совпал с package.json ($VERSION)"; exit 1; }
+
+            echo "$abi: версия $version_name, $(du -h "$APK" | cut -f1), HLS-классов: $hls — проверен"
+          done
+
+      - name: Переименовать APK под версию
+        run: |
+          set -euo pipefail
+          for abi in arm64-v8a armeabi-v7a; do
+            mv "android/app/build/outputs/apk/release/app-$abi-release.apk" \
+               "rusvid-$VERSION-$abi.apk"
+          done
+
       - name: Зафиксировать версию и поставить тег
         run: |
           set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -132,6 +204,8 @@ jobs:
               || echo "::warning::версию не удалось запушить в main (защита ветки?) — тег ставлю, package.json в main остался прежним"
           fi
 
+          git tag -a "v$VERSION" -m "RusVid $VERSION"
+          git push origin "refs/tags/v$VERSION"
           git tag -a "v$VERSION" -m "RusVid $VERSION"
           git push origin "refs/tags/v$VERSION"
 

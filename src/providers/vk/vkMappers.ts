@@ -1,6 +1,7 @@
 import type { AccessState, VideoSummary } from '../../core/model/media';
 import { makeVideoUid } from '../../core/model/media';
 import type { VkImageDto, VkVideoDto } from './vkApiTypes';
+import type { VkOwnerIndex } from './vkCatalog';
 
 const PROVIDER_ID = 'vk' as const;
 
@@ -17,7 +18,7 @@ export function buildVkVideoId(dto: VkVideoDto): string | null {
   return dto.access_key ? `${base}_${dto.access_key}` : base;
 }
 
-export function mapVkVideo(dto: VkVideoDto): VideoSummary | null {
+export function mapVkVideo(dto: VkVideoDto, owners?: VkOwnerIndex): VideoSummary | null {
   const id = buildVkVideoId(dto);
   if (!id) {
     return null;
@@ -29,13 +30,17 @@ export function mapVkVideo(dto: VkVideoDto): VideoSummary | null {
     id,
     title: dto.title?.trim() || 'Без названия',
     description: dto.description?.trim() || undefined,
-    thumbnailUrl: pickLargestImage(dto.image),
+    // `first_frame` — запасной кадр: у части эфиров и свежих загрузок обложки
+    // ещё нет, и без него карточка осталась бы серым прямоугольником.
+    thumbnailUrl: pickLargestImage(dto.image) ?? pickLargestImage(dto.first_frame),
     durationSec: !isLive && typeof dto.duration === 'number' ? dto.duration : undefined,
     viewCount: typeof dto.views === 'number' ? dto.views : undefined,
     publishedAt:
       typeof dto.date === 'number' ? new Date(dto.date * 1000).toISOString() : undefined,
     isLive,
-    author: undefined, // video.search без extended не возвращает профили авторов
+    // Авторов платформа отдаёт отдельными списками `groups`/`profiles`,
+    // а в самом видео есть только `owner_id`, по которому они и находятся.
+    author: dto.owner_id !== undefined ? owners?.get(dto.owner_id) : undefined,
     access: mapAccess(dto),
     webUrl:
       dto.owner_id !== undefined && dto.id !== undefined
@@ -44,11 +49,16 @@ export function mapVkVideo(dto: VkVideoDto): VideoSummary | null {
   };
 }
 
-export function mapVkVideoList(items: readonly VkVideoDto[] | undefined): VideoSummary[] {
+export function mapVkVideoList(
+  items: readonly VkVideoDto[] | undefined,
+  owners?: VkOwnerIndex,
+): VideoSummary[] {
   if (!items) {
     return [];
   }
-  return items.map(mapVkVideo).filter((video): video is VideoSummary => video !== null);
+  return items
+    .map((item) => mapVkVideo(item, owners))
+    .filter((video): video is VideoSummary => video !== null);
 }
 
 /**
