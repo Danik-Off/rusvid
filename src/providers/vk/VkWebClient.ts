@@ -14,8 +14,9 @@
 
 import { ProviderError } from '../../core/errors/ProviderError';
 import { HttpClient, type QueryValue } from '../../data/http/HttpClient';
+import { MOBILE_USER_AGENT } from '../shared/userAgent';
 import type { VkVideoDto } from './vkApiTypes';
-import { VK_VIDEO_ORIGIN } from './vkAuth';
+import { VK_WEB_ORIGIN } from './vkAuth';
 
 /** Насколько глубоко ищем объекты видео в недокументированной нагрузке. */
 const MAX_WALK_DEPTH = 12;
@@ -27,35 +28,49 @@ export class VkWebClient {
     this.http =
       http ??
       new HttpClient({
-        baseUrl: VK_VIDEO_ORIGIN,
+        baseUrl: VK_WEB_ORIGIN,
         providerId: 'vk',
         defaultHeaders: {
           Accept: '*/*',
+          // Без этого заголовка VK уводит мобильный клиент на `m.vk.com`,
+          // и вместо конверта `al_*` приходит HTML.
           'X-Requested-With': 'XMLHttpRequest',
-          Origin: VK_VIDEO_ORIGIN,
-          Referer: `${VK_VIDEO_ORIGIN}/`,
+          Origin: VK_WEB_ORIGIN,
+          Referer: `${VK_WEB_ORIGIN}/video`,
+          // Тот же браузер, что и в WebView экрана входа: сессия заводилась
+          // им, им же должны уходить и запросы. См. shared/userAgent.ts.
+          'User-Agent': MOBILE_USER_AGENT,
         },
       });
   }
 
-  /** Есть ли живая сессия сайта. */
+  /**
+   * Есть ли живая сессия сайта.
+   *
+   * Признак — идентификатор пользователя, который VK кладёт в служебный блок
+   * `statsMeta` **любого** ответа `al_*`: у анонимного клиента там ноль.
+   * Это надёжнее, чем «ответ вообще пришёл»: анонимному клиенту VK охотно
+   * отвечает валидным JSON — только с отказом внутри (`payload: ["3", …]`,
+   * то есть «иди на страницу входа»), и прежняя проверка «разобралось —
+   * значит вошли» считала бы такой ответ успехом.
+   */
   async probeSession(signal?: AbortSignal): Promise<boolean> {
-    try {
-      await this.call('search', { q: 'а', offset: 0 }, signal);
-      return true;
-    } catch (cause) {
-      const error = ProviderError.from(cause, 'vk');
-      if (error.code === 'AUTH_REQUIRED') {
-        return false;
-      }
-      // Сеть легла — это не «пользователь вышел»; пусть решает вызывающий.
-      throw error;
-    }
+    return extractVkUserId(await this.call('search', { q: 'а', offset: 0 }, signal)) > 0;
   }
 
   /** Поиск по видео. Возвращает карточки в форме, знакомой мапперам VK. */
   async search(query: string, offset: number, signal?: AbortSignal): Promise<VkVideoDto[]> {
     const payload = await this.call('search', { q: query, offset }, signal);
+    // Отказ из-за пропавшей сессии обязан выглядеть как отказ, а не как
+    // «ничего не нашлось»: иначе пользователю предложат уточнить запрос
+    // вместо того, чтобы предложить войти заново.
+    if (extractVkUserId(payload) <= 0) {
+      throw new ProviderError({
+        code: 'AUTH_REQUIRED',
+        providerId: 'vk',
+        message: 'Сессия ВКонтакте истекла — войдите на сайте ещё раз',
+      });
+    }
     return collectVideoObjects(payload);
   }
 
@@ -76,10 +91,12 @@ export class VkWebClient {
 /**
  * Разбор конверта `al_*`-ответа.
  *
- * VK отдаёт `<!--` и следом JSON. Без сессии вместо конверта приходит обычная
- * HTML-страница входа — по этому и отличаем «не авторизован» от «сломался
- * формат»: разница важна, потому что в первом случае пользователю надо
- * предложить войти, а во втором — сообщить о поломке.
+ * Исторически VK отдавал `<!--` и следом JSON; сейчас — чистый JSON, но
+ * префикс всё ещё встречается на части endpoint'ов, поэтому поддерживаем оба.
+ * Без сессии вместо конверта иногда приходит обычная HTML-страница входа —
+ * по этому и отличаем «не авторизован» от «сломался формат»: разница важна,
+ * потому что в первом случае пользователю надо предложить войти, а во
+ * втором — сообщить о поломке.
  */
 export function parseAlEnvelope(body: string): unknown {
   const start = body.indexOf('{');
@@ -102,6 +119,31 @@ export function parseAlEnvelope(body: string): unknown {
       cause,
     });
   }
+}
+
+/**
+ * Идентификатор пользователя из служебного блока ответа (`statsMeta.id`).
+ * Ноль — анонимный клиент.
+ *
+ * Отсутствие самого поля — это не «не вошёл», а «VK поменял формат»: молча
+ * считать такой ответ выходом означало бы выкидывать пользователя из
+ * аккаунта при первом же изменении на стороне платформы.
+ */
+export function extractVkUserId(payload: unknown): number {
+  const meta = asRecord(asRecord(payload)?.statsMeta);
+  const id = meta?.id;
+  if (typeof id !== 'number' || !Number.isFinite(id)) {
+    throw new ProviderError({
+      code: 'PARSE',
+      providerId: 'vk',
+      message: 'ВКонтакте не сообщил, кто вошёл, — формат ответа изменился',
+    });
+  }
+  return id;
+}
+
+function asRecord(node: unknown): Record<string, unknown> | null {
+  return node !== null && typeof node === 'object' ? (node as Record<string, unknown>) : null;
 }
 
 /**

@@ -34,6 +34,17 @@ class ScreenControlModule(private val reactContext: ReactApplicationContext) :
   /** Слушатель фокуса окна; снимается вместе с активностью, к которой привязан. */
   private var focusListener: ViewTreeObserver.OnWindowFocusChangeListener? = null
 
+  /**
+   * Слушатель геометрии окна.
+   *
+   * Фокуса мало: вход в полноэкранный режим сам поворачивает активность, а
+   * поворот фокус не меняет — окно просто перекладывается в новые границы, и
+   * полосы при этом возвращаются. Именно это и происходит в самый заметный
+   * момент: пользователь нажал «на весь экран», кадр развернулся, а клавиши
+   * навигации остались поверх него.
+   */
+  private var layoutListener: View.OnLayoutChangeListener? = null
+
   init {
     reactContext.addLifecycleEventListener(this)
   }
@@ -56,9 +67,9 @@ class ScreenControlModule(private val reactContext: ReactApplicationContext) :
     immersiveEnabled = enabled
     onActivity { activity ->
       if (enabled) {
-        installFocusListener(activity)
+        installListeners(activity)
       } else {
-        removeFocusListener(activity)
+        removeListeners(activity)
       }
       applyImmersive(activity)
     }
@@ -69,7 +80,7 @@ class ScreenControlModule(private val reactContext: ReactApplicationContext) :
     onActivity { activity ->
       activity.requestedOrientation = orientationMode
       if (immersiveEnabled) {
-        installFocusListener(activity)
+        installListeners(activity)
       }
       applyImmersive(activity)
     }
@@ -78,7 +89,7 @@ class ScreenControlModule(private val reactContext: ReactApplicationContext) :
   override fun onHostPause() = Unit
 
   override fun onHostDestroy() {
-    onActivity { removeFocusListener(it) }
+    onActivity { removeListeners(it) }
   }
 
   private fun applyImmersive(activity: Activity) {
@@ -111,29 +122,55 @@ class ScreenControlModule(private val reactContext: ReactApplicationContext) :
   /**
    * Пока включён полноэкранный режим, полосы возвращаются на место при каждом
    * возврате фокуса окну — например, после закрытия шторки настроек плеера,
-   * которая на Android является отдельным окном.
+   * которая на Android является отдельным окном, — и при каждой смене
+   * геометрии окна, то есть после поворота экрана.
    */
-  private fun installFocusListener(activity: Activity) {
-    if (focusListener != null) {
-      return
-    }
+  private fun installListeners(activity: Activity) {
     val decorView = activity.window?.decorView ?: return
-    val listener =
-        ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
-          if (hasFocus && immersiveEnabled) {
-            applyImmersive(activity)
+
+    if (focusListener == null) {
+      val listener =
+          ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
+            if (hasFocus && immersiveEnabled) {
+              applyImmersive(activity)
+            }
           }
-        }
-    decorView.viewTreeObserver.addOnWindowFocusChangeListener(listener)
-    focusListener = listener
+      decorView.viewTreeObserver.addOnWindowFocusChangeListener(listener)
+      focusListener = listener
+    }
+
+    if (layoutListener == null) {
+      // Именно OnLayoutChangeListener, а не OnGlobalLayoutListener: второй
+      // срабатывает на любую перекладку внутри дерева — во время
+      // воспроизведения это десятки раз в секунду из-за полосы перемотки.
+      val listener =
+          View.OnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight,
+              oldBottom ->
+            val moved =
+                left != oldLeft || top != oldTop || right != oldRight || bottom != oldBottom
+            if (moved && immersiveEnabled) {
+              applyImmersive(activity)
+            }
+          }
+      decorView.addOnLayoutChangeListener(listener)
+      layoutListener = listener
+    }
   }
 
-  private fun removeFocusListener(activity: Activity) {
-    val listener = focusListener ?: return
-    focusListener = null
-    val observer = activity.window?.decorView?.viewTreeObserver ?: return
-    if (observer.isAlive) {
-      observer.removeOnWindowFocusChangeListener(listener)
+  private fun removeListeners(activity: Activity) {
+    val decorView = activity.window?.decorView
+
+    focusListener?.let { listener ->
+      focusListener = null
+      val observer = decorView?.viewTreeObserver
+      if (observer != null && observer.isAlive) {
+        observer.removeOnWindowFocusChangeListener(listener)
+      }
+    }
+
+    layoutListener?.let { listener ->
+      layoutListener = null
+      decorView?.removeOnLayoutChangeListener(listener)
     }
   }
 

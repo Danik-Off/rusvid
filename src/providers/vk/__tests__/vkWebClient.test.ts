@@ -1,8 +1,12 @@
 import { ProviderError } from '../../../core/errors/ProviderError';
-import { collectVideoObjects, parseAlEnvelope } from '../VkWebClient';
+import { collectVideoObjects, extractVkUserId, parseAlEnvelope } from '../VkWebClient';
 
 describe('parseAlEnvelope', () => {
-  it('снимает префикс `<!--` и разбирает JSON', () => {
+  it('разбирает чистый JSON, который VK отдаёт сейчас', () => {
+    expect(parseAlEnvelope('{"payload":[0,[]]}')).toEqual({ payload: [0, []] });
+  });
+
+  it('снимает исторический префикс `<!--`', () => {
     expect(parseAlEnvelope('<!--{"payload":[0,[]]}')).toEqual({ payload: [0, []] });
   });
 
@@ -14,6 +18,28 @@ describe('parseAlEnvelope', () => {
 
   it('битый конверт отличает от отсутствия сессии', () => {
     expect(catchError(() => parseAlEnvelope('<!--{ не json')).code).toBe('PARSE');
+  });
+});
+
+describe('extractVkUserId', () => {
+  /**
+   * Отказ анонимному клиенту — это ВАЛИДНЫЙ JSON, а не HTML: `payload: ["3", …]`
+   * означает «иди на страницу входа». Проверка «ответ разобрался — значит вошли»
+   * принимала такой отказ за успех, поэтому смотрим именно на `statsMeta.id`.
+   */
+  it('у анонимного клиента идентификатор нулевой', () => {
+    const anonymous = { payload: ['3', []], statsMeta: { platform: 'web2', id: 0 } };
+    expect(extractVkUserId(anonymous)).toBe(0);
+  });
+
+  it('у вошедшего пользователя возвращает его id', () => {
+    expect(extractVkUserId({ payload: [0, []], statsMeta: { id: 12345 } })).toBe(12345);
+  });
+
+  it('пропавшее поле — это смена формата, а не выход из аккаунта', () => {
+    expect(catchError(() => extractVkUserId({ payload: [0, []] })).code).toBe('PARSE');
+    expect(catchError(() => extractVkUserId({ statsMeta: { id: 'нет' } })).code).toBe('PARSE');
+    expect(catchError(() => extractVkUserId(null)).code).toBe('PARSE');
   });
 });
 

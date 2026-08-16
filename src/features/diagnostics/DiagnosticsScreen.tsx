@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getProviderMeta } from '../../app/container/providerMeta';
+import { screenControl } from '../player/screenControl';
 import { Button } from '../../ui/components/Button';
 import { Icon, type IconName } from '../../ui/components/Icon';
 import { ProviderBadge } from '../../ui/components/ProviderBadge';
@@ -28,6 +29,8 @@ export const DiagnosticsScreen: React.FC = () => {
           показывает, на каком шаге всё ломается.
         </Text>
 
+        <NativeModulesCard />
+
         {reports.map((report) => (
           <ReportCard key={report.providerId} report={report} />
         ))}
@@ -52,6 +55,32 @@ export const DiagnosticsScreen: React.FC = () => {
     </SafeAreaView>
   );
 };
+
+/**
+ * Состояние собственных нативных модулей.
+ *
+ * Обёртка `screenControl` намеренно молчалива: если модуль не попал в сборку,
+ * приложение продолжает работать, просто без блокировки ориентации и без
+ * скрытия системных полос. Ровно поэтому такую поломку легко не заметить —
+ * внешне «полный экран» открывается, только панель навигации остаётся поверх
+ * кадра. Здесь она перестаёт быть невидимой.
+ */
+const NativeModulesCard: React.FC = () => (
+  <View style={styles.card}>
+    <Text style={styles.cardTitle}>Полноэкранный режим</Text>
+    <StepRow
+      step={{
+        name: 'Нативный модуль экрана',
+        status: screenControl.available ? 'ok' : 'failed',
+        durationMs: 0,
+        detail: screenControl.available
+          ? 'Подключён: поворот и скрытие системных полос доступны.'
+          : 'Не собран. Панель навигации и статус-бар не спрячутся, ориентация ' +
+            'не зафиксируется. Пересоберите приложение после «gradlew clean».',
+      }}
+    />
+  </View>
+);
 
 const ReportCard: React.FC<{ readonly report: ProviderReport }> = ({ report }) => {
   const meta = getProviderMeta(report.providerId);

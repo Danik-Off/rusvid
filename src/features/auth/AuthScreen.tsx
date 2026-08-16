@@ -20,6 +20,7 @@ import { getAppContainer } from '../../app/container/AppContainer';
 import type { AuthScreenProps } from '../../app/navigation/types';
 import type { ProviderId } from '../../core/model/media';
 import type { OAuthSpec, WebLoginSpec } from '../../core/provider/auth';
+import { MOBILE_USER_AGENT } from '../../providers/shared/userAgent';
 import { Button } from '../../ui/components/Button';
 import { Icon } from '../../ui/components/Icon';
 import { ProviderBadge } from '../../ui/components/ProviderBadge';
@@ -349,14 +350,6 @@ const OAuthFlow: React.FC<FlowProps<OAuthSpec>> = ({ providerId, spec }) => {
 };
 
 // ---------------------------------------------------------------------------
-
-/**
- * Некоторые сайты отдают десктопную вёрстку клиенту без мобильного UA,
- * а форма входа в ней часто спрятана глубже.
- */
-const MOBILE_USER_AGENT =
-  'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-  'Chrome/122.0.0.0 Mobile Safari/537.36';
 
 const Hero: React.FC<{
   readonly title: string;

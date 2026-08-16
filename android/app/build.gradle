@@ -190,6 +190,38 @@ android {
     }
 }
 
+/**
+ * Кодогенерация обязана отработать ДО конфигурации CMake.
+ *
+ * Это не перестраховка, а починка реального молчаливого бага. Плагин React
+ * Native вешает кодогенерацию только на `preBuild`, а CMake конфигурируется
+ * своей задачей и может успеть раньше. Файл, которым собственный TurboModule
+ * приложения попадает в сборку, —
+ * `build/generated/source/codegen/jni/CMakeLists.txt` — проверяется в
+ * `ReactNative-application.cmake` через `if(EXISTS …)` ровно один раз, в
+ * момент конфигурации. Если его тогда не было, `libappmodules.so` для этой
+ * ABI собирается БЕЗ `ScreenControl`, а конфигурация кешируется в
+ * `android/app/.cxx` и сама уже не переделается.
+ *
+ * Ломается при этом только release на телефоне и только частично: JS видит
+ * `TurboModuleRegistry.get('ScreenControl') === null`, обёртка (screenControl.ts)
+ * штатно деградирует в пустышку, и полноэкранный режим тихо теряет и блокировку
+ * ориентации, и скрытие системных полос — панель навигации остаётся поверх кадра.
+ */
+tasks.configureEach { task ->
+    if (task.name.startsWith("configureCMake") || task.name.startsWith("generateJsonModel")) {
+        task.dependsOn("generateCodegenArtifactsFromSchema")
+    }
+}
+
+/**
+ * `clean` обязан снести и кеш конфигурации CMake: без этого сборка после
+ * `clean` переиспользует прежнее решение «кодогенерации нет» (см. выше).
+ */
+tasks.named("clean").configure {
+    delete file("${projectDir}/.cxx")
+}
+
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")

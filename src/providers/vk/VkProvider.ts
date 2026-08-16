@@ -88,7 +88,13 @@ export class VkProvider implements VideoProvider {
       const active = await this.web.probeSession(context.signal);
       await this.credentials.setSession('vk', active);
       return active;
-    } catch {
+    } catch (cause) {
+      const error = ProviderError.from(cause, 'vk');
+      if (error.code === 'AUTH_REQUIRED') {
+        // VK явно показал страницу входа — это и есть «не вошёл».
+        await this.credentials.setSession('vk', false);
+        return false;
+      }
       // Сеть или сам VK недоступны — это не «пользователь вышел».
       // Оставляем прежнюю отметку, чтобы вход не слетал на ровном месте.
       return this.isSignedIn();

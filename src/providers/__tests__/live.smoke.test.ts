@@ -6,13 +6,16 @@
  *
  *     $env:RUSVID_LIVE = '1'; npm test -- live.smoke
  *
- * VK сюда не включён: он требует пользовательский токен.
+ * Содержательные списки VK проверить отсюда нельзя — они требуют сессии
+ * живого пользователя. Зато проверяется главное: что endpoint вообще на
+ * месте и что анонимный клиент опознаётся как анонимный.
  */
 
 import { CredentialsStore } from '../../data/credentials/CredentialsStore';
 import { InMemoryKeyValueStore } from '../../data/storage/KeyValueStore';
 import { RutubeProvider } from '../rutube/RutubeProvider';
 import { SasflixProvider } from '../sasflix/SasflixProvider';
+import { VkWebClient } from '../vk/VkWebClient';
 
 /** Провайдерам нужен CredentialsStore; в смоуке он пустой — вход не проверяем. */
 function anonymousCredentials(): CredentialsStore {
@@ -83,6 +86,19 @@ describeLive('Sasflix (живое API)', () => {
 
     const manifest = await fetch(source.url).then((response) => response.text());
     expect(manifest.startsWith('#EXTM3U')).toBe(true);
+  });
+});
+
+describeLive('VK (живой веб-клиент)', () => {
+  /**
+   * Сторож против поломки, которая уже случалась: пока запросы уходили на
+   * `vkvideo.ru`, `POST /al_video.php` отвечал 404, и кнопка «Я вошёл» не
+   * могла сработать ни при каких условиях. Тест падает и на исчезнувшем
+   * endpoint'е (ошибка вместо ответа), и на смене формата (`statsMeta`
+   * пропал), то есть ровно на том, что ломает вход.
+   */
+  it('опознаёт анонимного клиента, а не падает и не «входит»', async () => {
+    await expect(new VkWebClient().probeSession()).resolves.toBe(false);
   });
 });
 
