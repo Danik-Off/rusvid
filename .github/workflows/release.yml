@@ -1,59 +1,47 @@
 name: Release
 
-# Релиз выпускается САМ, на каждый push в main с изменением кода.
-# Ничего поднимать, тегать и нажимать руками не нужно:
+# Релиз выпускается по факту поднятия версии в main — и только по нему:
 #
-#   1. версия считается по коммитам с последнего тега (Conventional Commits):
-#      feat! / BREAKING CHANGE -> major, feat -> minor, остальное -> patch
-#      (см. tools/next-version.mjs);
-#   2. новая версия записывается в package.json и коммитится обратно в main —
-#      оттуда её берёт android/app/build.gradle, поэтому versionName,
-#      versionCode и тег не могут разъехаться;
-#   3. собираются release APK под arm64-v8a и armeabi-v7a;
-#   4. ставится тег v<version> и публикуется GitHub Release с APK.
+#   1. поднимаете версию: npm run release:patch|minor|major
+#      (правит package.json и package-lock.json);
+#   2. коммитите и пушите в main;
+#   3. workflow видит, что тега v<version> ещё нет, прогоняет проверки,
+#      собирает release APK под arm64-v8a и armeabi-v7a, ставит тег
+#      v<version> и публикует GitHub Release с APK.
 #
-# Шаг версии можно задать вручную: Actions -> Release -> Run workflow -> bump.
-# Отдельный push можно оставить без релиза, написав [skip release] в сообщении
-# коммита.
+# Любой другой push в main сборку не запускает: пока версия та же, релизить
+# нечего. Перевыпустить уже выпущенную версию нельзя — тег на неё стоит.
 on:
   push:
     branches: [main]
-    paths-ignore:
-      # Правки текста и самого CI не выпускают новую сборку приложения.
-      - '**/*.md'
-      - 'docs/**'
-      - '.github/**'
-      - '.gitignore'
-      - '.editorconfig'
+    paths:
+      # Версия живёт здесь, поэтому и триггер один. Правки package.json без
+      # изменения версии (зависимости, скрипты) job «Проверить версию»
+      # отсеет — до сборки дело не дойдёт.
+      - package.json
+  # Ручной запуск — на случай, если релиз упал на середине: версия в
+  # package.json уже поднята, а тега ещё нет.
   workflow_dispatch:
-    inputs:
-      bump:
-        description: Шаг версии
-        type: choice
-        options: [auto, patch, minor, major]
-        default: auto
 
 permissions:
-  contents: write # нужно для коммита версии, тега и релиза
+  contents: write # нужно для тега и релиза
 
 concurrency:
-  # Релизы не параллелим: два прогона подрались бы за тег и за push в main.
+  # Релизы не параллелим: два прогона подрались бы за один тег.
   group: release
   cancel-in-progress: false
 
 jobs:
   version:
-    name: Вычислить версию
+    name: Проверить версию
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.head_commit.message, '[skip release]') }}
     outputs:
-      version: ${{ steps.next.outputs.version }}
-      should_release: ${{ steps.next.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+      should_release: ${{ steps.check.outputs.should_release }}
     steps:
       - uses: actions/checkout@v4
         with:
-          # Нужна вся история и все теги: версия считается по коммитам с
-          # последнего тега.
+          # Нужны все теги: по ним и определяется, выпускали ли уже эту версию.
           fetch-depth: 0
           fetch-tags: true
 
@@ -61,10 +49,8 @@ jobs:
         with:
           node-version: 22
 
-      - id: next
-        env:
-          BUMP: ${{ inputs.bump || 'auto' }}
-        run: node tools/next-version.mjs >> "$GITHUB_OUTPUT"
+      - id: check
+        run: node tools/release-version.mjs >> "$GITHUB_OUTPUT"
 
   release:
     name: Собрать и опубликовать
@@ -78,7 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Полная история нужна, чтобы коммит с версией лёг поверх main.
+          # Полная история и теги: тег ставится отсюда же.
           fetch-depth: 0
           fetch-tags: true
 
@@ -88,12 +74,6 @@ jobs:
           cache: npm
 
       - run: npm ci
-
-      - name: Записать версию
-        # Именно до сборки: build.gradle читает версию из package.json.
-        # npm version правит и package.json, и package-lock.json — поэтому
-        # после npm ci, иначе ci ругнулся бы на рассинхрон.
-        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Проверки перед релизом
         # Релиз не должен уезжать со сломанными типами или красными тестами.
@@ -180,35 +160,14 @@ jobs:
                "rusvid-$VERSION-$abi.apk"
           done
 
-      - name: Зафиксировать версию и поставить тег
+      - name: Поставить тег
         # Тег ставится только после того, как APK собран и проверен: тег без
-        # рабочей сборки хуже, чем его отсутствие.
+        # рабочей сборки хуже, чем его отсутствие. Коммит с версией уже в main —
+        # тег просто указывает на него.
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          if ! git diff --quiet -- package.json package-lock.json; then
-            git add package.json package-lock.json
-            # [skip ci] — чтобы коммит от бота не запускал прогоны по кругу.
-            git commit -m "chore(release): v$VERSION [skip ci]"
-
-            # За время сборки в main могли что-то запушить — не роняем релиз,
-            # а перекладываем коммит с версией поверх.
-            pushed=false
-            for attempt in 1 2 3; do
-              if git push origin HEAD:main; then pushed=true; break; fi
-              echo "push отклонён (попытка $attempt) — подтягиваю main"
-              git pull --rebase origin main || break
-            done
-
-            # main мог оказаться защищённым — это не повод не выпускать релиз.
-            # Тег указывает на коммит с версией, push тега утащит и его, так что
-            # следующая версия всё равно посчитается от тега, а не от package.json.
-            [ "$pushed" = true ] \
-              || echo "::warning::версию не удалось запушить в main (защита ветки?) — релиз выпускаю, package.json в main остался прежним"
-          fi
-
           git tag -a "v$VERSION" -m "RusVid $VERSION"
           git push origin "refs/tags/v$VERSION"
 
