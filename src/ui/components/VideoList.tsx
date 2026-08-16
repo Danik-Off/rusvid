@@ -3,6 +3,7 @@ import { FlatList, RefreshControl, StyleSheet, View, type ListRenderItemInfo } f
 
 import { getProviderMeta } from '../../app/container/providerMeta';
 import type { ProviderFailure } from '../../core/aggregator/AggregatorService';
+import type { ProviderErrorCode } from '../../core/errors/ProviderError';
 import type { VideoSummary } from '../../core/model/media';
 import { colors, spacing } from '../theme';
 import { VideoListSkeleton } from './Skeleton';
@@ -15,6 +16,8 @@ interface Props {
   readonly loading: boolean;
   readonly loadingMore: boolean;
   readonly error: string | null;
+  /** Код ошибки — по нему список отличает «нет сети» от сбоя платформы. */
+  readonly errorCode?: ProviderErrorCode;
   readonly failures: readonly ProviderFailure[];
   readonly emptyIcon?: IconName;
   readonly emptyTitle: string;
@@ -24,6 +27,8 @@ interface Props {
   readonly header?: React.ReactElement | null;
   readonly onPressItem: (video: VideoSummary) => void;
   readonly onLongPressItem?: (video: VideoSummary) => void;
+  /** Кнопка избранного на карточке. Не передана — кнопки нет. */
+  readonly onToggleFavorite?: (video: VideoSummary) => void;
   readonly onEndReached?: () => void;
   readonly onRefresh?: () => void;
   readonly onRetry?: () => void;
@@ -46,6 +51,7 @@ export const VideoList: React.FC<Props> = ({
   loading,
   loadingMore,
   error,
+  errorCode,
   failures,
   emptyIcon,
   emptyTitle,
@@ -55,6 +61,7 @@ export const VideoList: React.FC<Props> = ({
   header,
   onPressItem,
   onLongPressItem,
+  onToggleFavorite,
   onEndReached,
   onRefresh,
   onRetry,
@@ -68,11 +75,12 @@ export const VideoList: React.FC<Props> = ({
         video={item}
         onPress={onPressItem}
         onLongPress={onLongPressItem}
+        onToggleFavorite={onToggleFavorite}
         progress={progressOf?.(item)}
         isFavorite={isFavorite?.(item.uid)}
       />
     ),
-    [onPressItem, onLongPressItem, progressOf, isFavorite],
+    [onPressItem, onLongPressItem, onToggleFavorite, progressOf, isFavorite],
   );
 
   const noticeItems = useMemo(
@@ -99,7 +107,7 @@ export const VideoList: React.FC<Props> = ({
       return <VideoListSkeleton />;
     }
     if (error) {
-      return <ErrorView message={error} onRetry={onRetry} />;
+      return <ErrorView message={error} code={errorCode} onRetry={onRetry} />;
     }
     return (
       <EmptyState

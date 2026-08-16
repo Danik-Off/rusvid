@@ -14,6 +14,7 @@
 
 import { ProviderError } from '../../core/errors/ProviderError';
 import { HttpClient, type QueryValue } from '../../data/http/HttpClient';
+import { readResponseText } from '../../data/http/textDecoding';
 import { MOBILE_USER_AGENT } from '../shared/userAgent';
 import type { VkVideoDto } from './vkApiTypes';
 import { VK_WEB_ORIGIN } from './vkAuth';
@@ -37,6 +38,11 @@ export class VkWebClient {
           'X-Requested-With': 'XMLHttpRequest',
           Origin: VK_WEB_ORIGIN,
           Referer: `${VK_WEB_ORIGIN}/video`,
+          // Без этого заголовка VK отвечает анонимному клиенту по-английски:
+          // «Access denied (1)» вместо «Ошибка доступа (1)». Приложение
+          // русскоязычное, и показывать в нём чужие английские сообщения
+          // платформы незачем.
+          'Accept-Language': 'ru-RU,ru;q=0.9',
           // Тот же браузер, что и в WebView экрана входа: сессия заводилась
           // им, им же должны уходить и запросы. См. shared/userAgent.ts.
           'User-Agent': MOBILE_USER_AGENT,
@@ -84,7 +90,9 @@ export class VkWebClient {
       { act, al: 1, ...params },
       { query: { act }, signal },
     );
-    return parseAlEnvelope(await response.text());
+    // Не `response.text()`: VK отвечает в windows-1251 сырыми байтами, и
+    // разбор как UTF-8 необратимо съедает кириллицу в заголовках видео.
+    return parseAlEnvelope(await readResponseText(response));
   }
 }
 

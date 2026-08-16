@@ -48,7 +48,9 @@
 | `src/data/storage/` | обёртка над AsyncStorage + in-memory реализация для тестов |
 | `src/data/{settings,library,credentials}/` | репозитории настроек, истории/избранного, учётных данных |
 | `src/providers/<id>/` | `<Id>Provider.ts`, `<id>ApiTypes.ts`, `<id>Mappers.ts` |
+| `src/providers/shared/` | общее для платформ: `WebSessionGuard`, `userAgent`, `webSession` |
 | `src/features/<name>/` | экран + его store |
+| `src/specs/` | спецификации собственных нативных модулей (кодогенерация) |
 | `src/app/container/` | composition root |
 
 ---
@@ -258,7 +260,14 @@ PlayerOverlay (живёт НАД навигатором, монтируется 
 | `searchStore` | запрос, результаты, курсоры, сбои платформ |
 | `playerStore` | что играет, очередь, режим, скорость, дорожки, таймер сна |
 | `libraryStore` | история просмотров и избранное |
+| `searchHistoryStore` | недавние поисковые запросы |
+| `updatesStore` | проверка релизов на GitHub |
 | `diagnosticsStore` | отчёты самопроверки платформ |
+
+**Подписка на пометки списков — только через `useLibraryMarks()`.**
+`useLibraryStore((s) => s.progressOf)` возвращает ссылку на функцию, которая
+никогда не меняется: экран не перерисуется при изменении истории, и полоски
+досмотра на карточках замрут. Хук подписывается на сами данные.
 
 `playerStore` — единственный, кто зовёт `libraryStore` напрямую: позиция
 просмотра рождается в плеере, а живёт в библиотеке, и промежуточный слой

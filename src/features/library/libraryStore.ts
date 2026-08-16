@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { create } from 'zustand';
 
 import { getAppContainer } from '../../app/container/AppContainer';
@@ -47,6 +48,15 @@ interface LibraryState {
    * следующего тика может уже не быть.
    */
   noteProgress: (video: VideoSummary, positionSec: number, flush?: boolean) => Promise<void>;
+  /**
+   * Отметить факт открытия видео, не трогая сохранённую позицию.
+   *
+   * Отдельно от {@link LibraryState.noteProgress}, потому что позиция при
+   * открытии ещё не известна, а `noteProgress(video, 0)` затёр бы прошлую:
+   * достаточно было выключить «продолжать с места остановки», чтобы каждое
+   * повторное открытие обнуляло прогресс на карточках.
+   */
+  noteOpened: (video: VideoSummary) => Promise<void>;
   toggleFavorite: (video: VideoSummary) => Promise<void>;
   isFavorite: (uid: string) => boolean;
   /** Прогресс просмотра 0..1 для полоски на карточке. */
@@ -95,26 +105,30 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     await getAppContainer().library.saveHistory(history);
   },
 
+  noteOpened: async (video) => {
+    const { historyEnabled, historyLimit } = useSettingsStore.getState().settings;
+    if (!historyEnabled) {
+      return;
+    }
+    const previous = get().history.find((entry) => entry.video.uid === video.uid);
+    const history = mergeWatch(get().history, video, previous?.positionSec ?? 0, historyLimit);
+    set({ history });
+
+    // Троттлинг сбрасываем: запись только что ушла на диск, и следующий тик
+    // прогресса не должен считать, что писать «ещё рано».
+    lastPersistAt = Date.now();
+    lastMemoryAt = lastPersistAt;
+    await getAppContainer().library.saveHistory(history);
+  },
+
   toggleFavorite: async (video) => {
     const favorites = await getAppContainer().library.toggleFavorite(video);
     set({ favorites });
   },
 
-  isFavorite: (uid) => get().favorites.some((entry) => entry.video.uid === uid),
+  isFavorite: (uid) => isFavoriteIn(get().favorites, uid),
 
-  progressOf: (video) => {
-    const entry = get().history.find((item) => item.video.uid === video.uid);
-    if (!entry) {
-      return undefined;
-    }
-    if (entry.completed) {
-      return 1;
-    }
-    if (!video.durationSec || video.durationSec <= 0) {
-      return undefined;
-    }
-    return Math.min(1, entry.positionSec / video.durationSec);
-  },
+  progressOf: (video) => progressIn(get().history, video),
 
   resumePositionOf: (video) => {
     const entry = get().history.find((item) => item.video.uid === video.uid);
@@ -138,3 +152,58 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ favorites: [] });
   },
 }));
+
+// ---------------------------------------------------------------------------
+// Пометки на карточках списка
+// ---------------------------------------------------------------------------
+
+/** Прогресс просмотра 0..1, или `undefined`, если считать не из чего. */
+export function progressIn(
+  history: readonly HistoryEntry[],
+  video: VideoSummary,
+): number | undefined {
+  const entry = history.find((item) => item.video.uid === video.uid);
+  if (!entry) {
+    return undefined;
+  }
+  if (entry.completed) {
+    return 1;
+  }
+  const duration = video.durationSec ?? entry.video.durationSec;
+  if (!duration || duration <= 0) {
+    return undefined;
+  }
+  return Math.min(1, entry.positionSec / duration);
+}
+
+export function isFavoriteIn(favorites: readonly FavoriteEntry[], uid: string): boolean {
+  return favorites.some((entry) => entry.video.uid === uid);
+}
+
+export interface LibraryMarks {
+  readonly progressOf: (video: VideoSummary) => number | undefined;
+  readonly isFavorite: (uid: string) => boolean;
+}
+
+/**
+ * Пометки для списков: полоска досмотра и звёздочка избранного.
+ *
+ * Существует именно как хук, а не как пара методов стора, из-за подписки.
+ * `useLibraryStore((state) => state.progressOf)` возвращает ссылку на функцию,
+ * которая НИКОГДА не меняется, — значит, экран не перерисовывается при
+ * изменении истории. Полоски досмотра из-за этого замирали: посмотрел видео,
+ * свернул плеер, а карточка в ленте всё ещё показывает старую позицию (или
+ * ничего). Здесь подписка идёт на сами данные, поэтому список обновляется.
+ */
+export function useLibraryMarks(): LibraryMarks {
+  const history = useLibraryStore((state) => state.history);
+  const favorites = useLibraryStore((state) => state.favorites);
+
+  return useMemo(
+    () => ({
+      progressOf: (video: VideoSummary) => progressIn(history, video),
+      isFavorite: (uid: string) => isFavoriteIn(favorites, uid),
+    }),
+    [history, favorites],
+  );
+}

@@ -135,7 +135,18 @@ export class AggregatorService {
       items: interleave(buckets),
       cursors,
       failures,
-      hasMore: options.providers.some((provider) => cursors[provider.meta.id] !== null),
+      /**
+       * Следующая страница есть только там, где платформа сама вернула курсор.
+       *
+       * Строгая проверка на строку, а не `!== null`: у платформы, которая
+       * упала, курсор так и остаётся `undefined`, и прежнее условие считало
+       * это «есть ещё». Список при каждой прокрутке до низа снова дёргал
+       * упавшую платформу, показывал спиннер и снова падал — бесконечно.
+       * Повторить попытку пользователь может явно, кнопкой в полосе ошибок.
+       */
+      hasMore: options.providers.some(
+        (provider) => typeof cursors[provider.meta.id] === 'string',
+      ),
     };
   }
 }

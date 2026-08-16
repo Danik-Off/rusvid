@@ -12,6 +12,7 @@
  */
 
 import { CredentialsStore } from '../../data/credentials/CredentialsStore';
+import { readResponseText } from '../../data/http/textDecoding';
 import { InMemoryKeyValueStore } from '../../data/storage/KeyValueStore';
 import { RutubeProvider } from '../rutube/RutubeProvider';
 import { SasflixProvider } from '../sasflix/SasflixProvider';
@@ -99,6 +100,41 @@ describeLive('VK (живой веб-клиент)', () => {
    */
   it('опознаёт анонимного клиента, а не падает и не «входит»', async () => {
     await expect(new VkWebClient().probeSession()).resolves.toBe(false);
+  });
+
+  /**
+   * Кодировка на живом ответе.
+   *
+   * VK отвечает в `windows-1251` сырыми байтами, и `response.text()` съедает
+   * кириллицу необратимо. Проверяем на настоящем ответе, а не на своей
+   * заготовке: юнит-тест декодера подтверждает таблицу, а этот — что платформа
+   * всё ещё отвечает в этой кодировке и что заголовок с ней доезжает.
+   *
+   * `act=show` выбран потому, что анонимному клиенту он отвечает осмысленной
+   * русской строкой — «Ошибка доступа (1)». `Accept-Language` обязателен:
+   * без него VK отвечает по-английски, и кириллицы в ответе не будет вовсе —
+   * тест проходил бы, ничего не проверив.
+   */
+  it('кириллица в ответе не превращается в «?»', async () => {
+    const response = await fetch('https://vk.com/al_video.php?act=show', {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        Origin: 'https://vk.com',
+        Referer: 'https://vk.com/video',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
+        'Accept-Language': 'ru-RU,ru;q=0.9',
+      },
+      body: 'act=show&al=1',
+    });
+
+    expect(response.headers.get('content-type')).toContain('windows-1251');
+
+    const text = await readResponseText(response);
+
+    expect(text).toContain('Ошибка доступа');
+    // U+FFFD — след необратимо потерянного байта.
+    expect(text).not.toContain('�');
   });
 });
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,7 +9,7 @@ import { VideoList } from '../../ui/components/VideoList';
 import { colors, hitSlop, spacing, typography } from '../../ui/theme';
 import { usePlayerStore } from '../player/playerStore';
 import { useBottomSpace } from '../player/usePlayerLayout';
-import { useLibraryStore } from './libraryStore';
+import { useLibraryMarks, useLibraryStore } from './libraryStore';
 
 type Tab = 'history' | 'favorites';
 
@@ -21,6 +21,7 @@ const TABS = [
 export const LibraryScreen: React.FC = () => {
   const [tab, setTab] = useState<Tab>('history');
   const library = useLibraryStore();
+  const marks = useLibraryMarks();
   const openPlayer = usePlayerStore((state) => state.open);
   const bottomSpace = useBottomSpace();
 
@@ -30,6 +31,15 @@ export const LibraryScreen: React.FC = () => {
         ? library.history.map((entry) => entry.video)
         : library.favorites.map((entry) => entry.video),
     [tab, library.history, library.favorites],
+  );
+
+  // Ссылка обязана быть стабильной: `VideoCard` мемоизирован по ней, и новая
+  // функция на каждый рендер обесценивала бы memo на всём списке.
+  const toggleFavorite = useCallback(
+    (video: VideoSummary) => {
+      void library.toggleFavorite(video);
+    },
+    [library],
   );
 
   const confirmClear = () => {
@@ -83,14 +93,13 @@ export const LibraryScreen: React.FC = () => {
         emptyHint={
           tab === 'history'
             ? 'Здесь появятся видео, которые вы смотрели, — вместе с позицией просмотра'
-            : 'Добавьте видео долгим нажатием на карточку или кнопкой в плеере'
+            : 'Добавьте видео звёздочкой на карточке, долгим нажатием или кнопкой в плеере'
         }
         onPressItem={(video) => openPlayer(video, items)}
-        onLongPressItem={(video) => {
-          void library.toggleFavorite(video);
-        }}
-        progressOf={library.progressOf}
-        isFavorite={library.isFavorite}
+        onLongPressItem={toggleFavorite}
+        onToggleFavorite={toggleFavorite}
+        progressOf={marks.progressOf}
+        isFavorite={marks.isFavorite}
         bottomSpace={bottomSpace}
       />
     </SafeAreaView>

@@ -47,5 +47,9 @@ export const vkAuthSpec: WebLoginSpec = {
   // Внутренний endpoint веб-клиента: в его ответе VK всегда сообщает
   // идентификатор текущего пользователя. См. VkWebClient.probeSession.
   verifySessionPath: '/al_video.php',
+  // Все три домена обязательны. VK умеет восстанавливать сессию между своими
+  // площадками (`login.vk.ru?act=autologin`), поэтому выход только с vk.com
+  // отменялся бы первым же заходом на vkvideo.ru.
+  sessionOrigins: [VK_WEB_ORIGIN, 'https://vkvideo.ru', 'https://login.vk.ru'],
   logoutUrl: `${VK_WEB_ORIGIN}/`,
 };

@@ -72,6 +72,7 @@ export class RutubeProvider implements VideoProvider {
       'Нажмите «Войти» в шапке сайта и войдите как обычно — по номеру телефона, ' +
       'почте или через соцсеть. Приложение подхватит сессию само.',
     verifySessionPath: '/api/profile/user/',
+    sessionOrigins: [BASE_URL],
     logoutUrl: `${BASE_URL}/logout/`,
   };
 

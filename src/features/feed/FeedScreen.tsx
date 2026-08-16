@@ -10,7 +10,7 @@ import type { VideoSummary } from '../../core/model/media';
 import { ChipRow, type ChipOption } from '../../ui/components/ChipRow';
 import { VideoList } from '../../ui/components/VideoList';
 import { colors, spacing, typography } from '../../ui/theme';
-import { useLibraryStore } from '../library/libraryStore';
+import { useLibraryMarks, useLibraryStore } from '../library/libraryStore';
 import { usePlayerStore } from '../player/playerStore';
 import { useBottomSpace } from '../player/usePlayerLayout';
 import { useSettingsStore } from '../settings/settingsStore';
@@ -29,8 +29,8 @@ export const FeedScreen: React.FC = () => {
     .filter(([, value]) => value)
     .map(([key]) => key)
     .join(',');
-  const progressOf = useLibraryStore((state) => state.progressOf);
-  const isFavorite = useLibraryStore((state) => state.isFavorite);
+  const marks = useLibraryMarks();
+  const toggleFavorite = useLibraryStore((state) => state.toggleFavorite);
   const openPlayer = usePlayerStore((state) => state.open);
   const bottomSpace = useBottomSpace();
 
@@ -79,6 +79,22 @@ export const FeedScreen: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabledProviders, signedInKey]);
 
+  /**
+   * Включённые платформы, у которых ленты нет вовсе.
+   *
+   * Без этой строки VK выглядит сломанным: его чипа в ленте не появляется
+   * (у платформы нет трендов), и человек читает это как ошибку приложения,
+   * а не как ограничение платформы.
+   */
+  const feedOnlyElsewhere = useMemo(
+    () =>
+      getAppContainer()
+        .registry.active(enabledProviders)
+        .filter((provider) => !provider.capabilities.trendingFeed)
+        .map((provider) => provider.meta.title),
+    [enabledProviders],
+  );
+
   const categoryOptions = useMemo<ChipOption[]>(
     () => [
       { id: 'all', label: 'Все категории' },
@@ -102,6 +118,11 @@ export const FeedScreen: React.FC = () => {
           void feed.setScope(id as FeedScope);
         }}
       />
+      {feedOnlyElsewhere.length > 0 ? (
+        <Text style={styles.scopeNote}>
+          {`${feedOnlyElsewhere.join(' и ')} в ленте нет — платформа отдаёт только поиск`}
+        </Text>
+      ) : null}
       {feed.scope !== 'all' && feed.scope !== 'subscriptions' && feed.categories.length > 0 ? (
         <ChipRow
           options={categoryOptions}
@@ -121,6 +142,7 @@ export const FeedScreen: React.FC = () => {
         loading={feed.status === 'loading'}
         loadingMore={feed.status === 'loadingMore'}
         error={feed.status === 'error' ? feed.error : null}
+        errorCode={feed.errorCode ?? undefined}
         failures={feed.failures}
         header={header}
         emptyIcon="play"
@@ -129,6 +151,7 @@ export const FeedScreen: React.FC = () => {
         emptyActionLabel="Открыть настройки"
         onEmptyAction={() => navigation.navigate('Tabs', { screen: 'Settings' })}
         onPressItem={openVideo}
+        onToggleFavorite={toggleFavorite}
         onEndReached={() => {
           void feed.loadMore();
         }}
@@ -138,8 +161,8 @@ export const FeedScreen: React.FC = () => {
         onRetry={() => {
           void refresh();
         }}
-        progressOf={progressOf}
-        isFavorite={isFavorite}
+        progressOf={marks.progressOf}
+        isFavorite={marks.isFavorite}
         bottomSpace={bottomSpace}
       />
     </SafeAreaView>
@@ -159,5 +182,11 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xs,
+  },
+  scopeNote: {
+    ...typography.caption,
+    color: colors.textMuted,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
   },
 });
