@@ -1,12 +1,13 @@
 name: Android
 
-# Проверочная сборка: подтверждает, что проект вообще собирается.
+# Проверочная сборка: подтверждает, что проект вообще собирается и что в APK
+# есть классы HLS. Артефакт остаётся внутри CI и удаляется через две недели —
+# это проверка, а не канал раздачи готовых сборок (см. DISCLAIMER.md, раздел 3).
 #
-# В main этот workflow не нужен: там на каждый push и так собирается release
-# APK в release.yml — две часовых сборки на один коммит ничего не добавляют.
+# main включён намеренно: релиз APK больше не собирает, и без этого прогона
+# потерянный RNVideo_useExoplayerHls приехал бы в main незамеченным.
 on:
   push:
-    branches-ignore: [main]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -87,7 +88,7 @@ jobs:
           chmod +x gradlew
           # Проверочной сборке хватает одной ABI: остальные собираются из тех же
           # исходников теми же тулчейнами и втрое удлиняют прогон.
-          # Релиз собирает arm64-v8a + armeabi-v7a — см. release.yml.
+          # Локальная сборка «для себя» делает обе — `npm run build:apk`.
           ARCH=-PreactNativeArchitectures=arm64-v8a
           if [ "$VARIANT" = "release" ]; then
             ./gradlew assembleRelease "$ARCH" --no-daemon --stacktrace

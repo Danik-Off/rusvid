@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getAppContainer } from '../../app/container/AppContainer';
+import { LEGAL_SHORT_NOTICE } from '../../core/legal/legalText';
 import type { RootStackParamList } from '../../app/navigation/types';
 import type { ProviderId } from '../../core/model/media';
 import type { VideoProvider } from '../../core/provider/VideoProvider';
@@ -55,7 +56,9 @@ export const SettingsScreen: React.FC = () => {
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomSpace + spacing.xl }]}>
         <Text style={styles.screenTitle}>Настройки</Text>
 
-        <Section title="Платформы" hint="Выключенные не участвуют в поиске и ленте">
+        <Section
+          title="Платформы"
+          hint="Выключенные не участвуют в поиске и ленте. Приложение неофициальное: оно не связано с платформами, а их названия принадлежат их владельцам.">
           {providers.map((provider) => (
             <ProviderRow
               key={provider.meta.id}
@@ -159,10 +162,29 @@ export const SettingsScreen: React.FC = () => {
           />
         </Section>
 
+        <Section title="О приложении">
+          <Pressable
+            style={styles.navRow}
+            accessibilityRole="button"
+            onPress={() => navigation.navigate('Legal')}>
+            <View style={styles.navIcon}>
+              <Icon name="lock" size={18} color={colors.accent} />
+            </View>
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>Правовая информация</Text>
+              <Text style={styles.rowHint}>
+                Условия использования, отказ от ответственности, обращения правообладателей
+              </Text>
+            </View>
+            <Icon name="chevronRight" size={18} color={colors.textMuted} />
+          </Pressable>
+        </Section>
+
         <View style={styles.about}>
           <Logo size={56} />
           <Text style={styles.aboutName}>RusVid</Text>
           <Text style={styles.aboutTagline}>Rutube · VK Видео · Sasflix</Text>
+          <Text style={styles.aboutLegal}>{LEGAL_SHORT_NOTICE}</Text>
         </View>
       </ScrollView>
 
@@ -436,5 +458,11 @@ const styles = StyleSheet.create({
   aboutTagline: {
     ...typography.caption,
     color: colors.textMuted,
+  },
+  aboutLegal: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
   },
 });

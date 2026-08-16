@@ -9,6 +9,15 @@ export const QUALITY_PREFERENCES: readonly QualityPreference[] = ['auto', 480, 7
 export const PLAYBACK_RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 
 export interface AppSettings {
+  /**
+   * Версия правовых условий, которую пользователь принял при первом запуске.
+   *
+   * `0` — не принимал ещё ничего. Хранится числом, а не флагом: когда текст
+   * условий меняется, `LEGAL_VERSION` растёт, и согласие спрашивается заново —
+   * иначе правка дисклеймера не значила бы ничего для тех, кто уже нажал
+   * «Принимаю».
+   */
+  readonly acceptedLegalVersion: number;
   /** Какие платформы участвуют в агрегации. Порядок не важен. */
   readonly enabledProviders: readonly ProviderId[];
   /** Писать ли историю просмотров. */
@@ -41,6 +50,8 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  // Ноль, а не LEGAL_VERSION: свежая установка обязана показать условия.
+  acceptedLegalVersion: 0,
   enabledProviders: [...PROVIDER_IDS],
   historyEnabled: true,
   preferNativePlayer: true,
@@ -73,6 +84,12 @@ export function normalizeSettings(raw: Partial<AppSettings> | null | undefined):
     : DEFAULT_SETTINGS.enabledProviders;
 
   return {
+    // Мусор на месте версии условий — это «не принимал»: показать экран
+    // согласия лишний раз безопаснее, чем пропустить его.
+    acceptedLegalVersion:
+      typeof raw.acceptedLegalVersion === 'number' && raw.acceptedLegalVersion > 0
+        ? Math.floor(raw.acceptedLegalVersion)
+        : DEFAULT_SETTINGS.acceptedLegalVersion,
     // Пустой список означал бы «нигде ничего не искать» — считаем это сбоем.
     enabledProviders: enabled.length > 0 ? enabled : DEFAULT_SETTINGS.enabledProviders,
     historyEnabled: raw.historyEnabled ?? DEFAULT_SETTINGS.historyEnabled,

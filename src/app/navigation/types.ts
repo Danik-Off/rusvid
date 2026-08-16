@@ -17,6 +17,8 @@ export type RootStackParamList = {
   /** Экран входа универсален: платформа определяется параметром. */
   Auth: { providerId: ProviderId };
   Diagnostics: undefined;
+  /** Условия использования и отказ от ответственности — из настроек. */
+  Legal: undefined;
 };
 
 export type TabParamList = {

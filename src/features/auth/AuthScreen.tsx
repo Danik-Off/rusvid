@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewNavigation } from 'react-native-webview';
 
 import { getAppContainer } from '../../app/container/AppContainer';
+import { LEGAL_SHORT_NOTICE } from '../../core/legal/legalText';
 import type { AuthScreenProps } from '../../app/navigation/types';
 import type { ProviderId } from '../../core/model/media';
 import type { OAuthSpec, WebLoginSpec } from '../../core/provider/auth';
@@ -182,6 +183,8 @@ const WebLoginFlow: React.FC<FlowProps<WebLoginSpec>> = ({ providerId, spec }) =
             Выйти на сайте платформы →
           </Text>
         ) : null}
+
+        <LegalFootnote />
       </ScrollView>
     </SafeAreaView>
   );
@@ -344,6 +347,8 @@ const OAuthFlow: React.FC<FlowProps<OAuthSpec>> = ({ providerId, spec }) => {
             }}
           />
         </View>
+
+        <LegalFootnote />
       </ScrollView>
     </SafeAreaView>
   );
@@ -363,6 +368,14 @@ const Hero: React.FC<{
     <Text style={styles.paragraph}>{children}</Text>
   </View>
 );
+
+/**
+ * Напоминание о том, чей это клиент, — именно на экране входа.
+ *
+ * Здесь пользователь передаёт приложению доступ к своей учётной записи, и это
+ * единственное место, где он мог бы принять его за официальный клиент платформы.
+ */
+const LegalFootnote: React.FC = () => <Text style={styles.hint}>{LEGAL_SHORT_NOTICE}</Text>;
 
 const ErrorBox: React.FC<{ readonly message: string }> = ({ message }) => (
   <View style={styles.errorBox}>

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import { getAppContainer } from '../../app/container/AppContainer';
+import { LEGAL_VERSION } from '../../core/legal/legalText';
 import type { ProviderId } from '../../core/model/media';
 import { DEFAULT_SETTINGS, type AppSettings } from '../../data/settings/AppSettings';
 
@@ -22,6 +23,8 @@ interface SettingsState {
    * знает и поле, и новое значение.
    */
   update: (patch: Partial<AppSettings>) => Promise<void>;
+  /** Пользователь принял текущую редакцию правовых условий. */
+  acceptLegal: () => Promise<void>;
   setToken: (id: ProviderId, token: string | null) => Promise<void>;
   setClientId: (id: ProviderId, clientId: string | null) => Promise<void>;
   signOut: (id: ProviderId) => Promise<void>;
@@ -66,6 +69,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   update: async (patch) => {
     await persist(set, { ...get().settings, ...patch });
+  },
+
+  acceptLegal: async () => {
+    await persist(set, { ...get().settings, acceptedLegalVersion: LEGAL_VERSION });
   },
 
   setToken: async (id, token) => {

@@ -62,7 +62,7 @@ npm install
 
 | Команда | Что делает |
 |---|---|
-| `npm run release:patch` | поднимает версию в `package.json` — коммит и push запускают релиз в CI |
+| `npm run release:patch` | поднимает версию в `package.json` — коммит и push заставляют CI поставить тег |
 | `npm start` | Metro-бандлер |
 | `npm run android` | debug-сборка + установка на устройство/эмулятор |
 | `npm run android:release` | release-сборка + установка |
@@ -113,7 +113,7 @@ npm run android
 
 Какие ABI собирать, решает свойство `reactNativeArchitectures`. В
 `gradle.properties` перечислены все четыре, чтобы работал x86-эмулятор;
-`build:apk` и релизный CI передают только телефонные:
+`build:apk` передаёт только телефонные:
 
 ```powershell
 npm run build:apk       # arm64-v8a + armeabi-v7a
@@ -151,7 +151,8 @@ def appVersionName = packageJson.version          // 1.2.3
 ```
 
 Поэтому номер нигде не дублируется, а `npm run release:patch` поднимает
-версию сразу и в npm-пакете, и в APK, и в теге релиза, который поставит CI.
+версию сразу и в npm-пакете, и в локально собранном APK, и в теге, который
+поставит CI.
 
 Ограничение схемы `versionCode`: `minor` и `patch` должны быть меньше 100 —
 сборка падает с понятным сообщением, если это нарушено.
@@ -159,8 +160,10 @@ def appVersionName = packageJson.version          // 1.2.3
 ## Подпись release-сборки
 
 По умолчанию release подписывается **отладочным** ключом из шаблона React
-Native (`android/app/debug.keystore`). Такой APK устанавливается и работает,
-но не годится для публикации.
+Native (`android/app/debug.keystore`). Такой APK устанавливается и работает —
+для сборки «себе на телефон» этого достаточно, и дальше можно не читать.
+Свой ключ нужен, если вы собираетесь обновлять приложение поверх: Android
+не даст поставить обновление, подписанное другим ключом.
 
 Свой ключ:
 

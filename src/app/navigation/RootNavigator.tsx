@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthScreen } from '../../features/auth/AuthScreen';
 import { DiagnosticsScreen } from '../../features/diagnostics/DiagnosticsScreen';
 import { FeedScreen } from '../../features/feed/FeedScreen';
+import { LegalScreen } from '../../features/legal/LegalScreen';
 import { LibraryScreen } from '../../features/library/LibraryScreen';
 import { SearchScreen } from '../../features/search/SearchScreen';
 import { SettingsScreen } from '../../features/settings/SettingsScreen';
@@ -91,6 +92,11 @@ export const RootNavigator: React.FC = () => (
         name="Diagnostics"
         component={DiagnosticsScreen}
         options={{ title: 'Проверка платформ' }}
+      />
+      <Stack.Screen
+        name="Legal"
+        component={LegalScreen}
+        options={{ title: 'Правовая информация' }}
       />
     </Stack.Navigator>
   </NavigationContainer>

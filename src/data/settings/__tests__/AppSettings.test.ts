@@ -19,6 +19,16 @@ describe('normalizeSettings', () => {
     );
   });
 
+  it('считает непринятыми условия, если версии на диске нет или она испорчена', () => {
+    expect(normalizeSettings({}).acceptedLegalVersion).toBe(0);
+    expect(normalizeSettings({ acceptedLegalVersion: '1' as never }).acceptedLegalVersion).toBe(0);
+    expect(normalizeSettings({ acceptedLegalVersion: -1 }).acceptedLegalVersion).toBe(0);
+  });
+
+  it('сохраняет принятую версию условий', () => {
+    expect(normalizeSettings({ acceptedLegalVersion: 1 }).acceptedLegalVersion).toBe(1);
+  });
+
   it('ограничивает размер истории', () => {
     expect(normalizeSettings({ historyLimit: 100_000 }).historyLimit).toBe(1000);
     expect(normalizeSettings({ historyLimit: -5 }).historyLimit).toBe(

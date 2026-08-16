@@ -43,6 +43,7 @@
 | `src/core/provider/` | `VideoProvider`, `ProviderRegistry`, `ProviderAuthSpec` |
 | `src/core/aggregator/` | `AggregatorService` — веерный опрос платформ |
 | `src/core/errors/` | `ProviderError` с кодами и русскими сообщениями |
+| `src/core/legal/` | тексты условий и `LEGAL_VERSION` — один источник для экрана первого запуска, настроек и `DISCLAIMER.md` |
 | `src/data/http/` | `HttpClient`: таймаут, ретраи, нормализация ошибок |
 | `src/data/cache/` | `TtlCache` с дедупликацией параллельных запросов |
 | `src/data/storage/` | обёртка над AsyncStorage + in-memory реализация для тестов |
@@ -168,6 +169,19 @@ VK-вход реализован как Implicit Flow во встроенном 
 Весь граф зависимостей собирается в `src/app/container/AppContainer.ts`.
 Экраны и сторы берут зависимости оттуда, а не создают сами; в тестах граф
 подменяется через `setAppContainer()`.
+
+### 11. Правовой шлюз на старте
+
+`App.tsx` рендерит `DisclaimerScreen` вместо всего интерфейса, пока
+`settings.acceptedLegalVersion` меньше `LEGAL_VERSION`. Шлюз стоит **выше**
+`NavigationContainer` и до `verifyAllSessions()`: до согласия приложение не
+делает ни одного запроса к платформам — иначе оно успело бы сходить к ним
+раньше, чем пользователь узнал, чей это клиент.
+
+Версия, а не булев флаг: правка текста условий увеличивает `LEGAL_VERSION`,
+и согласие спрашивается заново. Тексты лежат в `src/core/legal/legalText.ts`
+и оттуда же попадают на экран настроек — расхождение формулировок между
+экраном первого запуска и «Правовой информацией» невозможно by design.
 
 ---
 
